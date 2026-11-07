@@ -1,0 +1,66 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "id": 5001,
+      "marketoGUID": "5001",
+      "leadId": 1001,
+      "activityDate": "2026-11-01T10:00:00Z",
+      "activityTypeId": 1,
+      "primaryAttributeValueId": 71,
+      "primaryAttributeValue": "www.example.com/pricing",
+      "attributes": [
+        {
+          "name": "Client IP Address",
+          "value": "192.0.2.10"
+        },
+        {
+          "name": "Query Parameters",
+          "value": "utm_source=example&utm_medium=email"
+        },
+        {
+          "name": "Referrer URL",
+          "value": "https://www.example.com/"
+        },
+        {
+          "name": "User Agent",
+          "value": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0"
+        },
+        {
+          "name": "Webpage URL",
+          "value": "/pricing?utm_source=example&utm_medium=email"
+        }
+      ]
+    },
+    {
+      "id": 5002,
+      "marketoGUID": "5002",
+      "leadId": 1001,
+      "activityDate": "2026-11-02T11:30:00Z",
+      "activityTypeId": 2,
+      "primaryAttributeValueId": 12,
+      "primaryAttributeValue": "Contact Us Form",
+      "attributes": [
+        {
+          "name": "Client IP Address",
+          "value": "192.0.2.10"
+        },
+        {
+          "name": "Form Fields",
+          "value": "{\"Email\":\"jane.doe@example.com\"}"
+        },
+        {
+          "name": "Webpage ID",
+          "value": "15"
+        },
+        {
+          "name": "User Agent",
+          "value": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0"
+        }
+      ]
+    }
+  ],
+  "nextPageToken": "EXAMPLETOKENCCCC====",
+  "moreResult": false
+}

@@ -1,0 +1,13 @@
+# Secrets and private data (CLAUDE.md rule 4)
+config.toml
+playbook.md
+briefs/
+.env
+# Build outputs
+*.snap
+dist/
+/mkto
+*.out
+# Local tooling
+.superpowers/
+.claude/settings.local.json

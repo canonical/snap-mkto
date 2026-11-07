@@ -1,0 +1,49 @@
+{
+  "lead": {
+    "id": 1001,
+    "fields": {
+      "createdAt": "2025-01-10T09:00:00Z",
+      "email": "jane.doe@example.com",
+      "firstName": "Jane",
+      "id": 1001,
+      "lastName": "Doe",
+      "updatedAt": "2026-10-01T12:00:00Z"
+    }
+  },
+  "since": "2026-10-08T12:00:00Z",
+  "events": [
+    {
+      "id": 5001,
+      "date": "2026-11-01T10:00:00Z",
+      "type": "Visit Webpage",
+      "primary": "www.example.com/pricing",
+      "attributes": {
+        "Client IP Address": "192.0.2.10",
+        "Query Parameters": "utm_source=example\u0026utm_medium=email",
+        "Referrer URL": "https://www.example.com/",
+        "User Agent": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0",
+        "Webpage URL": "/pricing?utm_source=example\u0026utm_medium=email"
+      }
+    },
+    {
+      "id": 5002,
+      "date": "2026-11-02T11:30:00Z",
+      "type": "Fill Out Form",
+      "primary": "Contact Us Form",
+      "attributes": {
+        "Client IP Address": "192.0.2.10",
+        "Form Fields": "{\"Email\":\"jane.doe@example.com\"}",
+        "User Agent": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0",
+        "Webpage ID": "15"
+      }
+    }
+  ],
+  "programs": [
+    {
+      "id": 1001,
+      "name": "Example Webinar 2026",
+      "status": "Member"
+    }
+  ],
+  "notes": []
+}

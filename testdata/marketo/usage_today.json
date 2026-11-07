@@ -1,0 +1,20 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "date": "2026-11-07",
+      "total": 1120,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 1000
+        },
+        {
+          "userId": "admin@example.com",
+          "count": 120
+        }
+      ]
+    }
+  ]
+}

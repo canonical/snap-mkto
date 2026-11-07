@@ -1,0 +1,25 @@
+# mkto configuration. Keep this file private: it holds your API credentials (chmod 600).
+
+[marketo]
+# Admin > Web Services > REST API. Accept with or without a trailing /rest and normalise.
+base_url = "https://123-ABC-456.mktorest.com"
+# Admin > Integration > LaunchPoint > your API-only service > View Details.
+client_id = ""
+client_secret = ""
+# The API doesn't report your subscription's limit, so it lives here.
+daily_quota = 50000
+lead_fields = ["id", "email", "firstName", "lastName", "title", "company",
+               "industry", "country", "leadSource", "createdAt", "updatedAt"]
+# Default activity types for `mkto activity`, resolved by NAME at runtime.
+activity_types = ["Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered",
+                  "Open Email", "Click Email", "Unsubscribe Email",
+                  "Change Status in Progression", "Interesting Moment", "New Lead"]
+
+[output]
+timezone = "Local"   # or an IANA name, e.g. "Asia/Tbilisi"
+
+[llm]                # mkto brief: off by default. Read docs/LLM_LAYER.md (sign-off) before enabling.
+enabled = false
+provider = "anthropic"
+api_key = ""
+model = "claude-sonnet-5-5"

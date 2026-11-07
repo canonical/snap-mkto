@@ -1,0 +1,23 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "id": 2001,
+      "name": "Example Webinar 2026",
+      "description": "",
+      "createdAt": "2026-01-05T10:00:00Z",
+      "updatedAt": "2026-02-01T10:00:00Z",
+      "url": "https://app.example.com/#PG2001A1",
+      "type": "Default",
+      "channel": "Webinar",
+      "folder": {
+        "type": "Folder",
+        "value": 3001,
+        "folderName": "Webinars"
+      },
+      "status": "",
+      "workspace": "Default"
+    }
+  ]
+}

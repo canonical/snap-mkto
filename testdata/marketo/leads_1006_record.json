@@ -1,0 +1,15 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "status": "skipped",
+      "reasons": [
+        {
+          "code": "1006",
+          "message": "Field 'bogusField' not found"
+        }
+      ]
+    }
+  ]
+}

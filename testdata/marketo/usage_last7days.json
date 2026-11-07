@@ -1,0 +1,76 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "date": "2026-11-01",
+      "total": 100,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 100
+        }
+      ]
+    },
+    {
+      "date": "2026-11-02",
+      "total": 200,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 200
+        }
+      ]
+    },
+    {
+      "date": "2026-11-03",
+      "total": 300,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 300
+        }
+      ]
+    },
+    {
+      "date": "2026-11-04",
+      "total": 400,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 400
+        }
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "total": 500,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 500
+        }
+      ]
+    },
+    {
+      "date": "2026-11-06",
+      "total": 600,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 600
+        }
+      ]
+    },
+    {
+      "date": "2026-11-07",
+      "total": 700,
+      "users": [
+        {
+          "userId": "api-only@example.com",
+          "count": 700
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+# Narrate payload (would be sent to the LLM)
+{
+  "lead": {
+    "company": "Example Corp",
+    "industry": "Software",
+    "country": "Germany",
+    "numberOfEmployees": 250,
+    "role": "senior engineering leader"
+  },
+  "events": [
+    {
+      "id": "E1",
+      "date": "2026-11-01T10:00:00Z",
+      "type": "Visit Webpage",
+      "url": "https://www.example.com/pricing"
+    },
+    {
+      "id": "E2",
+      "date": "2026-11-02T11:00:00Z",
+      "type": "Fill Out Form",
+      "asset": "Contact Us Form"
+    },
+    {
+      "id": "E3",
+      "date": "2026-11-03T08:00:00Z",
+      "type": "Interesting Moment"
+    }
+  ]
+}
+
+# Research query (would be sent to the LLM with web search)
+{
+  "company": "Example Corp",
+  "industry": "Software",
+  "country": "Germany"
+}

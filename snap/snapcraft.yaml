@@ -1,0 +1,40 @@
+name: mkto
+base: core26
+version: '0.1.0'
+summary: Read-only command-line client for the Marketo Engage REST API
+description: |
+  Look up a Marketo lead by email, see its recent activity and program
+  memberships, list programs, and check daily API quota usage.
+  mkto brief (optional, off by default) writes an LLM lead brief from
+  redacted activity data. mkto never writes to Marketo.
+grade: devel
+confinement: strict
+license: Apache-2.0
+source-code: https://github.com/canonical/snap-mkto
+issues: https://github.com/canonical/snap-mkto/issues
+
+parts:
+  mkto:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.27/stable
+    build-packages:
+      - git
+    # The go plugin has no ldflags option, so build the one binary ourselves
+    # (static: no cgo, nothing to link from the base).
+    override-build: |
+      COMMIT=$(git -c safe.directory='*' -C "$CRAFT_PART_SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)
+      CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+        -ldflags "-s -w -X main.version=$SNAPCRAFT_PROJECT_VERSION -X main.commit=$COMMIT" \
+        -o "$CRAFT_PART_INSTALL/bin/mkto" ./cmd/mkto
+    # Only the binary ships; nothing else from the project dir can reach the snap.
+    prime:
+      - bin/mkto
+
+apps:
+  mkto:
+    command: bin/mkto
+    plugs:
+      - network
+      - home

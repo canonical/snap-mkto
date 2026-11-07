@@ -1,0 +1,10 @@
+{
+  "requestId": "req#1",
+  "success": false,
+  "errors": [
+    {
+      "code": "1006",
+      "message": "Field 'bogusField' not found"
+    }
+  ]
+}

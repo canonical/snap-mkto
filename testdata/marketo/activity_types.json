@@ -1,0 +1,281 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "id": 1,
+      "name": "Visit Webpage",
+      "description": "Example description of Visit Webpage",
+      "primaryAttribute": {
+        "name": "Webpage ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 2,
+      "name": "Fill Out Form",
+      "description": "Example description of Fill Out Form",
+      "primaryAttribute": {
+        "name": "Webform ID",
+        "dataType": "integer"
+      },
+      "attributes": [
+        {
+          "name": "Client IP Address",
+          "dataType": "string"
+        },
+        {
+          "name": "Form Fields",
+          "dataType": "string"
+        },
+        {
+          "name": "Query Parameters",
+          "dataType": "string"
+        },
+        {
+          "name": "Referrer URL",
+          "dataType": "string"
+        },
+        {
+          "name": "User Agent",
+          "dataType": "string"
+        },
+        {
+          "name": "Webpage ID",
+          "dataType": "string"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Click Link",
+      "description": "Example description of Click Link",
+      "primaryAttribute": {
+        "name": "Webpage ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 6,
+      "name": "Send Email",
+      "description": "Example description of Send Email",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 7,
+      "name": "Email Delivered",
+      "description": "Example description of Email Delivered",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 8,
+      "name": "Email Bounced",
+      "description": "Example description of Email Bounced",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 9,
+      "name": "Unsubscribe Email",
+      "description": "Example description of Unsubscribe Email",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 10,
+      "name": "Open Email",
+      "description": "Example description of Open Email",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 11,
+      "name": "Click Email",
+      "description": "Example description of Click Email",
+      "primaryAttribute": {
+        "name": "Mailing ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 12,
+      "name": "New Lead",
+      "description": "Example description of New Lead",
+      "primaryAttribute": {
+        "name": "Created Date",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 13,
+      "name": "Change Data Value",
+      "description": "Example description of Change Data Value",
+      "primaryAttribute": {
+        "name": "Attribute Name",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 21,
+      "name": "Convert Lead",
+      "description": "Example description of Convert Lead",
+      "primaryAttribute": {
+        "name": "Lead ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 22,
+      "name": "Change Status in Progression",
+      "description": "Example description of Change Status in Progression",
+      "primaryAttribute": {
+        "name": "Program ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 34,
+      "name": "Add to List",
+      "description": "Example description of Add to List",
+      "primaryAttribute": {
+        "name": "List ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 35,
+      "name": "Remove from List",
+      "description": "Example description of Remove from List",
+      "primaryAttribute": {
+        "name": "List ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 37,
+      "name": "Merge Leads",
+      "description": "Example description of Merge Leads",
+      "primaryAttribute": {
+        "name": "Lead ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 39,
+      "name": "Create Task",
+      "description": "Example description of Create Task",
+      "primaryAttribute": {
+        "name": "Task ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 46,
+      "name": "Interesting Moment",
+      "description": "Example description of Interesting Moment",
+      "primaryAttribute": {
+        "name": "Campaign ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 47,
+      "name": "Request Campaign",
+      "description": "Example description of Request Campaign",
+      "primaryAttribute": {
+        "name": "Campaign ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 48,
+      "name": "Send Alert",
+      "description": "Example description of Send Alert",
+      "primaryAttribute": {
+        "name": "Campaign ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 104,
+      "name": "Change Lead Partition",
+      "description": "Example description of Change Lead Partition",
+      "primaryAttribute": {
+        "name": "Lead ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 108,
+      "name": "Change Segment",
+      "description": "Example description of Change Segment",
+      "primaryAttribute": {
+        "name": "Segmentation ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 110,
+      "name": "Call Webhook",
+      "description": "Example description of Call Webhook",
+      "primaryAttribute": {
+        "name": "Webhook ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 101,
+      "name": "Change Revenue Stage",
+      "description": "Example description of Change Revenue Stage",
+      "primaryAttribute": {
+        "name": "Model ID",
+        "dataType": "integer"
+      },
+      "attributes": []
+    },
+    {
+      "id": 100,
+      "name": "Change Score",
+      "description": "Example description of Change Score",
+      "primaryAttribute": {
+        "name": "Score Name",
+        "dataType": "integer"
+      },
+      "attributes": []
+    }
+  ]
+}

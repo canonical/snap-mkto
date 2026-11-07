@@ -1,0 +1,18 @@
+[
+  {
+    "id": 2001,
+    "name": "Example Webinar 2026",
+    "type": "Default",
+    "channel": "Webinar",
+    "workspace": "Default",
+    "createdAt": "2026-01-05T10:00:00Z"
+  },
+  {
+    "id": 2002,
+    "name": "Example Event 2026",
+    "type": "Default",
+    "channel": "Event",
+    "workspace": "Default",
+    "createdAt": "2026-01-05T10:00:00Z"
+  }
+]

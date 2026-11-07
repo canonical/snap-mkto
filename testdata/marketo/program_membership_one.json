@@ -1,0 +1,15 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "id": 1001,
+      "progressionStatus": "Member",
+      "isExhausted": false,
+      "acquiredBy": true,
+      "reachedSuccess": false,
+      "membershipDate": "2026-09-01T00:00:00Z",
+      "updatedAt": "2026-09-01T00:00:00Z"
+    }
+  ]
+}

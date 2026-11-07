@@ -1,0 +1,132 @@
+{
+  "company": "Example Corp",
+  "days": 90,
+  "verified": true,
+  "declined": "",
+  "sentences": [
+    {
+      "text": "The lead visited the pricing page.",
+      "cites": [
+        "E1"
+      ]
+    },
+    {
+      "text": "A day later the lead filled out the contact form, which may indicate buying interest.",
+      "cites": [
+        "E2"
+      ]
+    }
+  ],
+  "removed": [],
+  "research": {
+    "summary": [
+      {
+        "text": "Example Corp is a German software company.",
+        "sources": [
+          2
+        ]
+      }
+    ],
+    "size": {
+      "text": "It has about 250 employees.",
+      "sources": [
+        2
+      ]
+    },
+    "industry": null,
+    "signals": [
+      {
+        "text": "It runs workloads on Kubernetes.",
+        "sources": [
+          1
+        ]
+      }
+    ],
+    "news": [
+      {
+        "text": "It announced a Kubernetes migration in September 2026.",
+        "sources": [
+          1,
+          2
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "url": "https://news.example.com/example-corp-k8s",
+        "title": "Example Corp moves to Kubernetes"
+      },
+      {
+        "url": "https://www.example.org/about",
+        "title": "About Example Corp"
+      }
+    ],
+    "unavailable": ""
+  },
+  "pitch": {
+    "offerings": [
+      {
+        "name": "Ubuntu Pro",
+        "reason": "The pricing visit may indicate interest in support for what they run.",
+        "cites": [
+          "E1"
+        ]
+      },
+      {
+        "name": "Kubernetes",
+        "reason": "They announced a Kubernetes migration.",
+        "cites": [
+          "E2",
+          "1"
+        ]
+      }
+    ],
+    "opener": "I saw Example Corp is moving to Kubernetes; happy to share what other platform teams learned.",
+    "unknowns": [
+      "Whether the lead runs Ubuntu today."
+    ],
+    "no_fit": false,
+    "unavailable": ""
+  },
+  "events": [
+    {
+      "id": "E1",
+      "date": "2026-11-01T10:00:00Z",
+      "type": "Visit Webpage",
+      "url": "https://www.example.com/pricing"
+    },
+    {
+      "id": "E2",
+      "date": "2026-11-02T11:00:00Z",
+      "type": "Fill Out Form",
+      "asset": "Contact Us Form"
+    },
+    {
+      "id": "E3",
+      "date": "2026-11-03T08:00:00Z",
+      "type": "Interesting Moment"
+    }
+  ],
+  "usage": {
+    "narrate": {
+      "in": 120,
+      "out": 45
+    },
+    "verify": {
+      "in": 200,
+      "out": 8
+    },
+    "research": {
+      "in": 300,
+      "out": 60
+    },
+    "pitch": {
+      "in": 150,
+      "out": 40
+    },
+    "total": {
+      "in": 770,
+      "out": 153
+    }
+  }
+}

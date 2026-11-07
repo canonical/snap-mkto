@@ -1,0 +1,10 @@
+{
+  "requestId": "req#1",
+  "success": false,
+  "errors": [
+    {
+      "code": "606",
+      "message": "Max rate limit '100' exceeded with in '20' secs"
+    }
+  ]
+}

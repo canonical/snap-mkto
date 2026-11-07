@@ -1,0 +1,10 @@
+{
+  "requestId": "req#1",
+  "success": false,
+  "errors": [
+    {
+      "code": "615",
+      "message": "Concurrent access limit reached"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "version": "dev",
+  "commit": "none",
+  "go": "go1.test",
+  "snap": "mkto (x1)"
+}

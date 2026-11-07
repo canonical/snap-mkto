@@ -1,0 +1,14 @@
+{
+  "requestId": "req#1",
+  "result": [
+    {
+      "id": 1001,
+      "updatedAt": "2026-10-01T12:00:00Z",
+      "lastName": "Doe",
+      "email": "jane.doe@example.com",
+      "createdAt": "2025-01-10T09:00:00Z",
+      "firstName": "Jane"
+    }
+  ],
+  "success": true
+}
