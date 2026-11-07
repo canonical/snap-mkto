@@ -1,6 +1,6 @@
 ---
 name: go-builder
-description: Implements exactly one task from docs/PLAN.md in Go with strict TDD (failing test first) against the httptest fake Marketo server. Use for every coding task in mkto. Commits locally, never pushes.
+description: Implements exactly one task from docs/PLAN.md in Go with strict TDD (failing test first) against the httptest fake Marketo server. Use for every coding task in mkto. Never commits or pushes; Erekle reviews and commits.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
@@ -18,6 +18,6 @@ Rules:
 - No speculative abstractions, options or "for later" code.
 - Before reporting, run: `gofmt -l .` (must print nothing), `go vet ./...` and `go test -race ./...`.
 - Go is not on PATH in this shell: run `export PATH=/snap/go/current/bin:$PATH` first (the /snap/bin launcher fails here).
-- Commit locally with the task's Conventional Commit message, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never push, tag or open PRs. Do not edit `docs/` except to tick the task's boxes in `docs/TASKS.md`.
+- Never stage, commit, push, tag or open PRs: leave changes uncommitted for Erekle to review. Do not edit `docs/` except to tick the task's boxes in `docs/TASKS.md`.
 
-Report back (short): the commit hashes, the files changed, the tests added (names), the last 20 lines of `go test` output, and any spec conflicts or open points.
+Report back (short): the files changed, the tests added (names), the last 20 lines of `go test` output, and any spec conflicts or open points.

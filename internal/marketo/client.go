@@ -27,13 +27,18 @@ var errIdentity502 = errors.New("identity endpoint returned HTTP 502")
 // backoff is the wait before each retry of 606, 615, 713 and 502.
 var backoff = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second}
 
+// Per-request limits. activities.json gets longer: Marketo scans instance-wide web
+// traffic for Visit Webpage and Click Link, and a page took 29 s on a real instance.
+var requestTimeout, activitiesTimeout = 30 * time.Second, 120 * time.Second
+
 // Options holds the client's dependencies. Zero values get real defaults;
-// a nil Log means quiet.
+// a nil Log means quiet. Progress gets slow-page notices whatever Log is.
 type Options struct {
-	HTTP  *http.Client
-	Log   io.Writer
-	Now   func() time.Time
-	Sleep func(context.Context, time.Duration) error
+	HTTP     *http.Client
+	Log      io.Writer
+	Progress io.Writer
+	Now      func() time.Time
+	Sleep    func(context.Context, time.Duration) error
 }
 
 // Client talks to one Marketo instance. It is not safe for concurrent use.
@@ -47,7 +52,7 @@ type Client struct {
 
 // New returns a client for baseURL (already normalised, e.g. https://x.mktorest.com).
 func New(baseURL, clientID, clientSecret string, o Options) *Client {
-	hc := http.Client{Timeout: 30 * time.Second}
+	var hc http.Client // timeouts are per request, in send
 	if o.HTTP != nil {
 		hc = *o.HTTP // shallow copy: never mutate the caller's client
 	}
@@ -107,12 +112,12 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 				return nil
 			}
 			if err := json.Unmarshal(body, out); err != nil {
-				return fmt.Errorf("decoding Marketo response (GET %s): %v", path, err)
+				return fmt.Errorf("%w (GET %s): %v", ErrDecode, path, err)
 			}
 			return nil
 		case code == "":
 			if status != http.StatusOK {
-				return fmt.Errorf("Marketo returned HTTP %d", status)
+				return &HTTPError{status}
 			}
 			return fmt.Errorf("Marketo returned success=false with no error details (GET %s)", path)
 		case code == "601" || code == "602":
@@ -186,7 +191,13 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	limit := requestTimeout
+	if path == activitiesPath {
+		limit = activitiesTimeout
+	}
+	rctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	req, err := http.NewRequestWithContext(rctx, http.MethodGet, u, nil)
 	if err != nil {
 		return 0, nil, fmt.Errorf("cannot build request for GET %s: check base_url in your config file", path)
 	}
@@ -199,8 +210,8 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 		if ctx.Err() != nil {
 			return 0, nil, ctx.Err()
 		}
-		if ne, ok := errors.AsType[net.Error](err); ok && ne.Timeout() {
-			return 0, nil, fmt.Errorf("GET %s timed out: Marketo did not answer in time", path)
+		if ne, ok := errors.AsType[net.Error](err); ok && ne.Timeout() || rctx.Err() != nil {
+			return 0, nil, timedOut(path)
 		}
 		var ue *url.Error
 		if errors.As(err, &ue) {
@@ -221,6 +232,9 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 		if ctx.Err() != nil {
 			return 0, nil, ctx.Err()
 		}
+		if rctx.Err() != nil {
+			return 0, nil, timedOut(path)
+		}
 		return 0, nil, fmt.Errorf("reading Marketo response (GET %s): %v", path, err)
 	}
 	c.logf("GET %s %d %dms", path, resp.StatusCode, time.Since(start).Milliseconds())
@@ -231,6 +245,10 @@ func (c *Client) logf(format string, a ...any) {
 	if c.o.Log != nil {
 		fmt.Fprintf(c.o.Log, format+"\n", a...)
 	}
+}
+
+func timedOut(path string) error {
+	return fmt.Errorf("GET %s timed out: Marketo did not answer in time", path)
 }
 
 func nonJSON(status int) error {

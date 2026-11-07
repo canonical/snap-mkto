@@ -6,6 +6,7 @@ package marketo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
@@ -14,9 +15,13 @@ import (
 )
 
 const (
-	batchSize = 10   // Marketo accepts at most 10 activity type ids per call
-	maxPages  = 1000 // per batch; guards against paging that never ends
+	batchSize      = 10   // Marketo accepts at most 10 activity type ids per call
+	maxPages       = 1000 // per batch; guards against paging that never ends
+	activitiesPath = "/rest/v1/activities.json"
 )
+
+// slowPage is when a page of activities earns a progress line on Options.Progress.
+var slowPage = 5 * time.Second
 
 // ActivityType is one Marketo activity type.
 type ActivityType struct {
@@ -93,6 +98,7 @@ type activityPage struct {
 // token for each batch, and follows moreResult (pages can be empty).
 func (c *Client) Activities(ctx context.Context, leadID int, typeIDs []int, since time.Time) ([]Activity, error) {
 	var acts []Activity
+	total := 0 // pages across batches, for progress lines
 	for start := 0; start < len(typeIDs); start += batchSize {
 		batch := typeIDs[start:min(start+batchSize, len(typeIDs))]
 		ids := make([]string, len(batch))
@@ -114,8 +120,13 @@ func (c *Client) Activities(ctx context.Context, leadID int, typeIDs []int, sinc
 				"leadIds":         {strconv.Itoa(leadID)},
 			}
 			var p activityPage
-			if err := c.get(ctx, "/rest/v1/activities.json", q, &p); err != nil {
+			total++
+			began := time.Now()
+			if err := c.get(ctx, activitiesPath, q, &p); err != nil {
 				return nil, err
+			}
+			if d := time.Since(began); d > slowPage && c.o.Progress != nil {
+				fmt.Fprintf(c.o.Progress, "scanning activity: page %d took %.1fs (web visits and link clicks are slow on large Marketo instances)\n", total, d.Seconds())
 			}
 			for _, r := range p.Result {
 				a := Activity{ID: r.ID, Date: r.Date, TypeID: r.TypeID, Primary: r.Primary, Attributes: map[string]any{}}

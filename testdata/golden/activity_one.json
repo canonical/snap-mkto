@@ -42,7 +42,8 @@
     {
       "id": 1001,
       "name": "Example Webinar 2026",
-      "status": "Member"
+      "status": "Member",
+      "date": "2026-10-20T09:15:00Z"
     }
   ],
   "notes": []

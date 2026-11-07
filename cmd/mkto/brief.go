@@ -91,14 +91,9 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 		}
 	}
 
-	fields := slices.Clone(cfg.Marketo.LeadFields)
-	for _, k := range []string{"id", "updatedAt", "firstName", "lastName", "email", "title", "company", "industry", "country", "numberOfEmployees"} {
-		if !slices.Contains(fields, k) {
-			fields = append(fields, k)
-		}
-	}
 	ctx := cmd.Context()
-	leads, err := client.LeadsByEmail(ctx, email, fields)
+	leads, err := leadsByEmail(ctx, cmd, env, client, cfg, email,
+		[]string{"id", "updatedAt", "firstName", "lastName", "email", "title", "company", "industry", "country", "numberOfEmployees"})
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}

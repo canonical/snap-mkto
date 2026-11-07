@@ -13,7 +13,7 @@ lead_fields = ["id", "email", "firstName", "lastName", "title", "company",
 # Default activity types for `mkto activity`, resolved by NAME at runtime.
 activity_types = ["Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered",
                   "Open Email", "Click Email", "Unsubscribe Email",
-                  "Change Status in Progression", "Interesting Moment", "New Lead"]
+                  "Change Status in Progression", "New Lead"]
 
 [output]
 timezone = "Local"   # or an IANA name, e.g. "Asia/Tbilisi"

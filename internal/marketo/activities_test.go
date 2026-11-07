@@ -4,12 +4,15 @@
 package marketo
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -169,5 +172,83 @@ func TestActivitiesPageCap(t *testing.T) {
 	}
 	if got := n.Load(); got != 1000 {
 		t.Errorf("pages = %d, want 1000", got)
+	}
+}
+
+// deadlines records how far off each request's context deadline is, by path.
+type deadlines struct {
+	mu sync.Mutex
+	by map[string]time.Duration
+}
+
+func (d *deadlines) RoundTrip(req *http.Request) (*http.Response, error) {
+	if dl, ok := req.Context().Deadline(); ok {
+		d.mu.Lock()
+		d.by[req.URL.Path] = time.Until(dl)
+		d.mu.Unlock()
+	}
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func TestRequestDeadlines(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
+	s.Handle(actsPath, page("", false, "x"))
+	d := &deadlines{by: map[string]time.Duration{}}
+	if _, err := newHarness(s, Options{HTTP: &http.Client{Transport: d}}).c.Activities(context.Background(), 1, []int{1}, since); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]time.Duration{actsPath: 120 * time.Second, tokenPath: 30 * time.Second, marketotest.IdentityPath: 30 * time.Second} {
+		if got := d.by[path]; got > want || got < want-5*time.Second {
+			t.Errorf("%s deadline in %v, want about %v", path, got, want)
+		}
+	}
+}
+
+func TestActivitiesTimeoutScaled(t *testing.T) {
+	old := activitiesTimeout
+	activitiesTimeout = 50 * time.Millisecond
+	defer func() { activitiesTimeout = old }()
+	s := marketotest.New(t)
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json", Delay: 100 * time.Millisecond}) // under 30 s: fine
+	s.Handle(actsPath, marketotest.Response{Body: "activities_final_page.json", Delay: 5 * time.Second})
+	start := time.Now()
+	_, err := newHarness(s, Options{}).c.Activities(context.Background(), 1, []int{1}, since)
+	if err == nil || err.Error() != "GET /rest/v1/activities.json timed out: Marketo did not answer in time" {
+		t.Fatalf("err = %v", err)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatal("timeout not honoured")
+	}
+}
+
+func TestActivitiesSlowPageProgress(t *testing.T) {
+	old := slowPage
+	slowPage = 20 * time.Millisecond
+	defer func() { slowPage = old }()
+	s := marketotest.New(t)
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
+	s.Handle(actsPath, marketotest.Response{Body: "activities_page_empty_more.json"},
+		marketotest.Response{Body: "activities_final_page.json", Delay: 60 * time.Millisecond})
+	var prog bytes.Buffer
+	if _, err := newHarness(s, Options{Progress: &prog}).c.Activities(context.Background(), 1, []int{1}, since); err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`^scanning activity: page 2 took [0-9]+\.[0-9]s \(web visits and link clicks are slow on large Marketo instances\)\n$`)
+	if !re.MatchString(prog.String()) {
+		t.Errorf("progress = %q, want one line for page 2", prog.String())
+	}
+}
+
+func TestActivitiesFastPageNoProgress(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
+	s.Handle(actsPath, marketotest.Response{Body: "activities_final_page.json"})
+	var prog bytes.Buffer
+	if _, err := newHarness(s, Options{Progress: &prog}).c.Activities(context.Background(), 1, []int{1}, since); err != nil {
+		t.Fatal(err)
+	}
+	if prog.Len() != 0 {
+		t.Errorf("progress = %q, want none", prog.String())
 	}
 }

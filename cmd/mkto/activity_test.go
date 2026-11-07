@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -253,8 +254,8 @@ func TestActivityProgramLookupFailureDegrades(t *testing.T) {
 	if !strings.Contains(out, "Example Webinar 2026") || !strings.Contains(out, "program 1002") {
 		t.Errorf("out:\n%s", out)
 	}
-	if strings.Count(errOut, "warning: could not look up program 1002 (") != 1 || !strings.Contains(errOut, "check the API user's asset permissions") {
-		t.Errorf("stderr: %s", errOut)
+	if want := "warning: could not look up 1 of 2 program names (Marketo returned no program 1002)\n"; errOut != want {
+		t.Errorf("stderr = %q, want %q", errOut, want)
 	}
 	js, _, _ := act(t, s, "--json")
 	if !strings.Contains(js, `"name": ""`) {
@@ -320,5 +321,187 @@ func TestTerminalEscapesStripped(t *testing.T) {
 		if !strings.Contains(out, "Evil�]52") {
 			t.Errorf("%s output lacks cleaned value:\n%s", cmd, out)
 		}
+	}
+}
+
+// datedMemberships returns a membership body with membershipDate set for each id.
+func datedMemberships(dates map[int]string) string {
+	var rows []string
+	for _, id := range slices.Sorted(maps.Keys(dates)) {
+		rows = append(rows, fmt.Sprintf(`{"id":%d,"progressionStatus":"Member","membershipDate":%q}`, id, dates[id]))
+	}
+	return `{"success":true,"result":[` + strings.Join(rows, ",") + `]}`
+}
+
+func namedProgram(id int) marketotest.Response {
+	return marketotest.Response{Body: fmt.Sprintf(`{"success":true,"result":[{"id":%d,"name":"Program %d","createdAt":"2026-01-05T10:00:00Z+0000"}]}`, id, id)}
+}
+
+// windowServer has two programs inside the 30-day window (since 2026-10-08 12:00 UTC) and one older.
+func windowServer(t *testing.T) *marketotest.Server {
+	s := activityServer(t)
+	s.Handle(membPath, marketotest.Response{Body: datedMemberships(map[int]string{
+		3001: "2026-11-01T01:08:44Z+0000", 3002: "2026-09-01T00:00:00Z+0000", 3003: "2026-11-05T09:00:00Z+0000"})})
+	for _, id := range []int{3001, 3002, 3003} {
+		s.Handle(fmt.Sprintf(programFmt, id), namedProgram(id))
+	}
+	return s
+}
+
+func TestActivityProgramsWindow(t *testing.T) {
+	s := windowServer(t)
+	out, errOut, code := act(t, s)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr %s", code, errOut)
+	}
+	if want := "\nPrograms\n  Program 3003  Member\n  Program 3001  Member\n+ 1 older programs (use --all-programs)\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("out:\n%s", out)
+	}
+	if got := s.Hits(fmt.Sprintf(programFmt, 3002)); got != 0 {
+		t.Errorf("older program looked up %d times", got)
+	}
+	js, _, _ := act(t, s, "--json")
+	for _, want := range []string{`"date": "2026-11-05T09:00:00Z"`, `"notes": [
+    "+ 1 older programs (use --all-programs)"`} {
+		if !strings.Contains(js, want) {
+			t.Errorf("json lacks %s:\n%s", want, js)
+		}
+	}
+	if strings.Contains(js, "3002") || strings.Index(js, `"id": 3003`) > strings.Index(js, `"id": 3001`) {
+		t.Errorf("json programs not windowed newest first:\n%s", js)
+	}
+}
+
+func TestActivityAllPrograms(t *testing.T) {
+	s := windowServer(t)
+	s.Handle(membPath, marketotest.Response{Body: strings.Replace(datedMemberships(map[int]string{
+		3001: "2026-11-01T01:08:44Z+0000", 3002: "2026-09-01T00:00:00Z+0000", 3003: "2026-11-05T09:00:00Z+0000"}),
+		`]}`, `,{"id":3004,"progressionStatus":"Member"}]}`, 1)}) // undated: last
+	s.Handle(fmt.Sprintf(programFmt, 3004), namedProgram(3004))
+	out, _, code := act(t, s, "--all-programs")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if want := "\nPrograms\n  Program 3003  Member\n  Program 3001  Member\n  Program 3002  Member\n  Program 3004  Member\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("out:\n%s", out)
+	}
+}
+
+func TestActivityProgramsNoDatesShowsAll(t *testing.T) {
+	s := activityServer(t)
+	s.Handle(membPath, marketotest.Response{Body: membershipBody(1001, 1002)})
+	s.Handle(fmt.Sprintf(programFmt, 1002), namedProgram(1002))
+	out, _, code := act(t, s)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if want := "\nPrograms\n  Example Webinar 2026  Member\n  Program 1002          Member\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("out:\n%s", out)
+	}
+	js, _, _ := act(t, s, "--json")
+	if progs := js[strings.Index(js, `"programs"`):]; strings.Contains(progs, `"date"`) || strings.Contains(progs, "older programs") {
+		t.Errorf("json:\n%s", js)
+	}
+}
+
+func TestActivityLookupsOnlyShownPrograms(t *testing.T) {
+	s := activityServer(t)
+	dates := map[int]string{}
+	for i := range 35 {
+		d := "2026-11-01T00:00:00Z+0000"
+		if i >= 30 {
+			d = "2026-01-01T00:00:00Z+0000" // older than the window
+		}
+		dates[4000+i] = d
+		s.Handle(fmt.Sprintf(programFmt, 4000+i), namedProgram(4000+i))
+	}
+	s.Handle(membPath, marketotest.Response{Body: datedMemberships(dates)})
+	out, _, code := act(t, s)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	shown, older := 0, 0
+	for id := range dates {
+		n := s.Hits(fmt.Sprintf(programFmt, id))
+		if id >= 4030 {
+			older += n
+		} else {
+			shown += n
+		}
+	}
+	if shown != 25 || older != 0 {
+		t.Errorf("lookups: %d shown, %d older; want 25 and 0", shown, older)
+	}
+	if !strings.Contains(out, "+ 5 older programs (use --all-programs)\n") || !strings.Contains(out, "showing names for 25 of 30 programs\n") {
+		t.Errorf("out:\n%s", out)
+	}
+}
+
+func TestActivityLookupWarningCollapsed(t *testing.T) {
+	const perm = "check the API user's asset permissions"
+	for _, c := range []struct {
+		name string
+		resp marketotest.Response
+		hint string
+	}{
+		{"603", marketotest.Response{Body: `{"success":false,"errors":[{"code":"603","message":"Access denied"}]}`}, perm},
+		{"HTTP 401", marketotest.Response{Status: http.StatusUnauthorized, Body: `{"success":false}`}, perm},
+		{"HTTP 403", marketotest.Response{Status: http.StatusForbidden, Body: `{"success":false}`}, perm},
+		{"decode", marketotest.Response{Body: `{"success":true,"result":[{"id":"not a number"}]}`}, "unexpected response format from Marketo; please report it"},
+		{"other", marketotest.Response{Body: `{"success":false,"errors":[{"code":"610","message":"Requested resource not found"}]}`}, "Marketo error 610: Requested resource not found"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := activityServer(t)
+			s.Handle(membPath, marketotest.Response{Body: membershipBody(1001, 1002, 1003, 1004)})
+			for _, id := range []int{1002, 1003, 1004} {
+				s.Handle(fmt.Sprintf(programFmt, id), c.resp)
+			}
+			_, errOut, code := act(t, s)
+			if code != 0 {
+				t.Fatalf("exit %d, stderr %s", code, errOut)
+			}
+			if want := "warning: could not look up 3 of 4 program names (" + c.hint + ")\n"; errOut != want {
+				t.Errorf("stderr = %q, want %q", errOut, want)
+			}
+		})
+	}
+}
+
+func TestActivityDropsMissingExtraField(t *testing.T) {
+	s := activityServer(t)
+	s.Handle(leadsPath, marketotest.Response{Body: `{"success":false,"errors":[{"code":"1006","message":"Field 'title' not found"}]}`},
+		marketotest.Response{Body: "leads_one.json"})
+	_, errOut, code := act(t, s, "--verbose")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr %s", code, errOut)
+	}
+	if got := s.Hits(leadsPath); got != 2 {
+		t.Errorf("leads hits = %d, want 2", got)
+	}
+	if f := strings.Split(s.Query(leadsPath).Get("fields"), ","); slices.Contains(f, "title") || !slices.Contains(f, "company") {
+		t.Errorf("retry fields = %v", f)
+	}
+	if !strings.Contains(errOut, "note: field \"title\" isn't on this Marketo instance; skipped\n") {
+		t.Errorf("stderr: %s", errOut)
+	}
+}
+
+func TestActivityProgramsMixedDates(t *testing.T) {
+	s := activityServer(t)
+	s.Handle(membPath, marketotest.Response{Body: `{"success":true,"result":[
+{"id":3001,"progressionStatus":"Member"},
+{"id":3002,"progressionStatus":"Member","membershipDate":"2026-09-01T00:00:00Z+0000"},
+{"id":3003,"progressionStatus":"Member","membershipDate":"2026-10-08T12:00:00Z+0000"},
+{"id":3004,"progressionStatus":"Member","membershipDate":"2026-11-05T09:00:00Z+0000"}]}`})
+	for _, id := range []int{3001, 3002, 3003, 3004} {
+		s.Handle(fmt.Sprintf(programFmt, id), namedProgram(id))
+	}
+	out, _, code := act(t, s)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	// 3003 is dated exactly at since (inclusive); undated 3001 is kept, last; only 3002 is older.
+	if want := "\nPrograms\n  Program 3004  Member\n  Program 3003  Member\n  Program 3001  Member\n+ 1 older programs (use --all-programs)\n"; !strings.HasSuffix(out, want) {
+		t.Errorf("out:\n%s", out)
 	}
 }

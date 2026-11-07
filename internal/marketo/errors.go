@@ -22,3 +22,11 @@ type FieldError struct{ Field string }
 func (e *FieldError) Error() string {
 	return fmt.Sprintf("field %q not found: fix lead_fields in your config file", e.Field)
 }
+
+// ErrDecode wraps a 200 success response whose body mkto could not decode.
+var ErrDecode = errors.New("decoding Marketo response")
+
+// HTTPError is a non-200 reply that carries no Marketo error code.
+type HTTPError struct{ Status int }
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("Marketo returned HTTP %d", e.Status) }

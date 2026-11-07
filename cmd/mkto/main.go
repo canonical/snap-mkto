@@ -32,7 +32,7 @@ func main() {
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Getenv: os.Getenv,
-		HTTP:   &http.Client{Timeout: 30 * time.Second},
+		HTTP:   &http.Client{}, // no client-wide timeout: marketo and llm set their own per request
 		Now:    time.Now,
 	})
 	stop()

@@ -56,6 +56,7 @@ mkto quota
 mkto lead jane@example.com
 mkto activity jane@example.com --days 30
 mkto activity jane@example.com --types "Open Email,Click Email" --json --out ~/jane.json
+mkto activity jane@example.com --all-programs   # programs outside the window too
 mkto programs --name webinar
 ```
 

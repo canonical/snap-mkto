@@ -137,8 +137,8 @@ func lead1006(t *testing.T, fixture string) {
 	if code != 1 {
 		t.Errorf("exit %d", code)
 	}
-	// bogusField isn't in lead_fields: the hint names the fields mkto adds itself.
-	if !strings.Contains(errOut, `field "bogusField" not found. It isn't in lead_fields, but mkto also requests id, updatedAt, title, company, industry, country and numberOfEmployees; this Marketo instance may not have that field`) {
+	// bogusField isn't in lead_fields: the hint names the fields mkto can't do without.
+	if !strings.Contains(errOut, `field "bogusField" not found. It isn't in lead_fields, but mkto needs id, email, firstName and lastName (the lookup key and the redaction guard); this Marketo instance may not have that field`) {
 		t.Errorf("stderr: %s", errOut)
 	}
 }

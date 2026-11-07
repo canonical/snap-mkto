@@ -45,8 +45,12 @@ func runPrograms(cmd *cobra.Command, env Env) error {
 		if !strings.Contains(strings.ToLower(p.Name), strings.ToLower(name)) {
 			continue
 		}
+		created := ""
+		if !p.CreatedAt.IsZero() {
+			created = p.CreatedAt.In(loc).Format("2006-01-02")
+		}
 		list = append(list, output.ProgramJSON{ID: p.ID, Name: p.Name, Type: p.Type, Channel: p.Channel, Workspace: p.Workspace, CreatedAt: p.CreatedAt.UTC()})
-		rows = append(rows, []string{fmt.Sprint(p.ID), p.Name, p.Type, p.Channel, p.Workspace, p.CreatedAt.In(loc).Format("2006-01-02")})
+		rows = append(rows, []string{fmt.Sprint(p.ID), p.Name, p.Type, p.Channel, p.Workspace, created})
 	}
 	var buf bytes.Buffer
 	switch {

@@ -55,6 +55,15 @@ These fixtures were written from the docs without a real response. Report pass/f
 5. **Activity type names and ids** (`GET /rest/v1/activities/types.json`). The fixture's names and ids (other than id 2) are from memory, and mkto resolves `activity_types` by name. On B4 (add `--verbose` if needed), report any `warning: unknown activity type "<name>" skipped` line, and report `No activity in the last 30 days.` for a lead you know was active. Either one means a default name in `activity_types` doesn't match your instance.
 6. **Last-7-days usage** (`GET /rest/v1/stats/usage/last7days.json`). The fixture's sample is inferred. On B1, check that the `Last 7 days` table has 7 dated rows with plausible totals, and that today's row (if listed) matches the count on the `Today (..., US Central)` line.
 
+**Confirmed on the 2026-11-07 run** (real production instance):
+
+- Item 1 passes: the paging token works.
+- Visit Webpage is slow: 7-day activity pages took 29 s, 29 s and 8 s; a 30-day page passed the old 30 s limit. Email types took about 3 s per page. mkto now allows 120 s for `activities.json` and prints a `scanning activity: page <n> took <s>s` line for pages over 5 s. Next run: check a 30-day `mkto activity` finishes and the progress lines appear.
+- Asset-API dates are `2026-11-01T01:08:44Z+0000` (Z plus offset), not RFC 3339. Program names failed to decode until this was handled. Next run: check program names show in `mkto activity` and `mkto programs` lists programs.
+- `numberOfEmployees` isn't on that instance (1006 on `mkto brief`); mkto now skips its own optional fields when missing. Next run: `mkto brief <email> --show-payload --verbose` shows the `note: field "numberOfEmployees"` line and succeeds.
+- "Interesting Moment" isn't an activity type there; it was removed from the default `activity_types`.
+- Still to confirm: **membership dates** (`membershipDate` / `updatedAt` on `programMembership.json`) and their format. On the next run, the Programs section of `mkto activity` should list only programs joined within `--days`, newest first, with a `+ <n> older programs` line; if it lists every program with no older line, Marketo sent no usable date. Report which, and paste the date shape from one membership row if possible.
+
 Also report: any message mentioning `unexpected non-JSON response`, any retry notice in `--verbose` (606/615/713/502), and anything that worked with `go run` but not in the snap.
 
 ## Uninstall

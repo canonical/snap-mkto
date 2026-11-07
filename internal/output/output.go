@@ -71,21 +71,23 @@ type EventJSON struct {
 	Attributes map[string]any `json:"attributes"`
 }
 
-// MembershipJSON is one program membership; Name is empty if it was not looked up.
+// MembershipJSON is one program membership; Name is empty if it was not looked up,
+// and Date (UTC) is omitted when Marketo sent none.
 type MembershipJSON struct {
-	ID     int    `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	ID     int       `json:"id"`
+	Name   string    `json:"name"`
+	Status string    `json:"status"`
+	Date   time.Time `json:"date,omitzero"`
 }
 
-// ProgramJSON is one program in `mkto programs --json`; CreatedAt is UTC.
+// ProgramJSON is one program in `mkto programs --json`; CreatedAt is UTC, omitted when unknown.
 type ProgramJSON struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
 	Type      string    `json:"type"`
 	Channel   string    `json:"channel"`
 	Workspace string    `json:"workspace"`
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time `json:"createdAt,omitzero"`
 }
 
 // UsageDayJSON is one day in `mkto quota --json`.

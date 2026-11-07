@@ -141,3 +141,20 @@ func TestQuotaOverLimit(t *testing.T) {
 		t.Errorf("stderr %q", errOut)
 	}
 }
+
+func TestProgramsMissingCreatedAt(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle(programsPath, marketotest.Response{Body: `{"success":true,"result":[{"id":7,"name":"Undated","type":"Default","channel":"Email","workspace":"Default"}]}`},
+		marketotest.Response{Body: "programs_browse_empty.json"})
+	out, _, code := fakeCLI(t, s, "programs")
+	if code != 0 || strings.Contains(out, "0001") || strings.Contains(out, "0000-") || !strings.HasSuffix(out, "7   Undated  Default  Email    Default    \n") {
+		t.Errorf("exit %d, got %q", code, out)
+	}
+	s = marketotest.New(t)
+	s.Handle(programsPath, marketotest.Response{Body: `{"success":true,"result":[{"id":7,"name":"Undated"}]}`},
+		marketotest.Response{Body: "programs_browse_empty.json"})
+	js, _, _ := fakeCLI(t, s, "programs", "--json")
+	if strings.Contains(js, "createdAt") {
+		t.Errorf("json:\n%s", js)
+	}
+}

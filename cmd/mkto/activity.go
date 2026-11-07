@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -36,6 +37,7 @@ func newActivityCmd(env Env) *cobra.Command {
 	f.Int("days", 30, "window size in days (at least 1)")
 	f.String("types", "", "comma-separated activity type names (overrides activity_types)")
 	f.Bool("all-types", false, "fetch every activity type (uses more API quota)")
+	f.Bool("all-programs", false, "show every program membership, not only those in the window")
 	f.Int("lead-id", 0, "pick this lead when several share the email")
 	f.String("out", "", "write the output to FILE (mode 0600) instead of stdout")
 	return cmd
@@ -46,6 +48,7 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	days, _ := f.GetInt("days")
 	typesFlag, _ := f.GetString("types")
 	allTypes, _ := f.GetBool("all-types")
+	allPrograms, _ := f.GetBool("all-programs")
 	leadID, _ := f.GetInt("lead-id")
 	outPath, _ := f.GetString("out")
 	asJSON, _ := f.GetBool("json")
@@ -75,13 +78,7 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	}
 	ctx := cmd.Context()
 
-	fields := slices.Clone(cfg.Marketo.LeadFields)
-	for _, k := range []string{"id", "updatedAt", "title", "company"} {
-		if !slices.Contains(fields, k) {
-			fields = append(fields, k)
-		}
-	}
-	leads, err := client.LeadsByEmail(ctx, email, fields)
+	leads, err := leadsByEmail(ctx, cmd, env, client, cfg, email, []string{"id", "updatedAt", "title", "company"})
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
@@ -127,8 +124,10 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
+	members, older := windowPrograms(members, since, allPrograms)
 	names := map[int]string{} // successful lookups, cached per run
 	attempted := map[int]bool{}
+	failed, firstErr := 0, error(nil)
 	for _, m := range members {
 		if attempted[m.ProgramID] {
 			continue
@@ -144,8 +143,14 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 		case errors.Is(err, marketo.ErrQuotaExhausted) || ctx.Err() != nil:
 			return mapErr(err, cfg, cfgPath)
 		default: // names are cosmetic: degrade to "program <id>"
-			warn("could not look up program %d (%v); check the API user's asset permissions", m.ProgramID, err)
+			failed++
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
+	}
+	if failed > 0 {
+		warn("could not look up %d of %d program names (%s)", failed, len(attempted), lookupHint(firstErr))
 	}
 	distinct := map[int]bool{}
 	for _, m := range members {
@@ -153,6 +158,10 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	}
 	if len(distinct) > maxProgramLookups {
 		notes = append(notes, fmt.Sprintf("showing names for %d of %d programs", maxProgramLookups, len(distinct)))
+	}
+	olderNote := ""
+	if older > 0 {
+		olderNote = fmt.Sprintf("+ %d older programs (use --all-programs)", older)
 	}
 
 	var buf bytes.Buffer
@@ -163,6 +172,9 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 			Events:   []output.EventJSON{},
 			Programs: []output.MembershipJSON{},
 			Notes:    append([]string{}, notes...),
+		}
+		if olderNote != "" {
+			res.Notes = append(res.Notes, olderNote)
 		}
 		for _, k := range cfg.Marketo.LeadFields {
 			res.Lead.Fields[k] = lead[k]
@@ -176,11 +188,11 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 			res.Events = append(res.Events, output.EventJSON{ID: a.ID, Date: a.Date.UTC(), Type: label(typeName[a.TypeID], "type", a.TypeID), Primary: a.Primary, Attributes: a.Attributes})
 		}
 		for _, m := range members {
-			res.Programs = append(res.Programs, output.MembershipJSON{ID: m.ProgramID, Name: names[m.ProgramID], Status: m.Status})
+			res.Programs = append(res.Programs, output.MembershipJSON{ID: m.ProgramID, Name: names[m.ProgramID], Status: m.Status, Date: m.Date})
 		}
 		err = output.WriteJSON(&buf, res)
 	} else {
-		err = writeActivity(&buf, lead, days, loc, acts, typeName, members, names, notes)
+		err = writeActivity(&buf, lead, days, loc, acts, typeName, members, names, olderNote, notes)
 	}
 	if err != nil {
 		return err
@@ -203,6 +215,31 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 		return err
 	}
 	return file.Close()
+}
+
+// windowPrograms returns the memberships to show, newest first (undated last), and how
+// many older ones it hid. Without all, those dated before since are hidden; undated ones
+// are always shown, since the date field is unverified on a real instance.
+func windowPrograms(members []marketo.Membership, since time.Time, all bool) ([]marketo.Membership, int) {
+	shown := slices.Clone(members)
+	if !all {
+		shown = slices.DeleteFunc(shown, func(m marketo.Membership) bool { return !m.Date.IsZero() && m.Date.Before(since) })
+	}
+	slices.SortStableFunc(shown, func(a, b marketo.Membership) int { return b.Date.Compare(a.Date) })
+	return shown, len(members) - len(shown)
+}
+
+// lookupHint says what to do about a failed program lookup, by the error's class.
+func lookupHint(err error) string {
+	ae, isAPI := errors.AsType[*marketo.APIError](err)
+	he, isHTTP := errors.AsType[*marketo.HTTPError](err)
+	switch {
+	case isAPI && ae.Code == "603", isHTTP && (he.Status == http.StatusUnauthorized || he.Status == http.StatusForbidden):
+		return "check the API user's asset permissions"
+	case errors.Is(err, marketo.ErrDecode):
+		return "unexpected response format from Marketo; please report it"
+	}
+	return err.Error() // warn cleans it
 }
 
 // pickLead chooses the lead to show and returns the duplicates note, if any.
@@ -247,7 +284,7 @@ func label(name, prefix string, id int) string {
 }
 
 func writeActivity(w *bytes.Buffer, lead marketo.Lead, days int, loc *time.Location, acts []marketo.Activity,
-	typeName map[int]string, members []marketo.Membership, names map[int]string, notes []string) error {
+	typeName map[int]string, members []marketo.Membership, names map[int]string, olderNote string, notes []string) error {
 	head := []string{fmt.Sprintf("Lead %d", lead.ID())}
 	for _, k := range []string{"title", "company"} {
 		if v := display(lead[k], loc); v != "" {
@@ -283,6 +320,9 @@ func writeActivity(w *bytes.Buffer, lead marketo.Lead, days int, loc *time.Locat
 	}
 	if err := output.Table(w, rows); err != nil {
 		return err
+	}
+	if olderNote != "" {
+		fmt.Fprintln(w, olderNote)
 	}
 	if len(notes) > 0 {
 		fmt.Fprintln(w)

@@ -37,7 +37,7 @@ lead_fields = ["id", "email", "firstName", "lastName", "title", "company",
 # Default activity types for `mkto activity`, resolved by NAME at runtime.
 activity_types = ["Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered",
                   "Open Email", "Click Email", "Unsubscribe Email",
-                  "Change Status in Progression", "Interesting Moment", "New Lead"]
+                  "Change Status in Progression", "New Lead"]
 
 [output]
 timezone = "Local"   # or an IANA name, e.g. "Asia/Tbilisi"
@@ -80,10 +80,10 @@ Marketo usually returns HTTP 200 even on failure. Always check `success`; on `fa
 | 713 | Transient error | Same backoff as 606 (Adobe: "wait … then retry"). |
 | HTTP 502 | Bad gateway | Same backoff as 606 (Adobe: "retried with exponential backoff"). |
 | 607 | Daily quota reached | Stop immediately. Tell the user, suggest `mkto quota`. Exit code 4. Quota resets at 12:00 AM US Central. |
-| 1006 | Field not found | Can arrive response-level (`errors[]`) or record-level (`status: "skipped"`, `reasons[]`). Handle both: name the field. If it is in `lead_fields`, say to fix `lead_fields` in the config; otherwise say mkto also requests `id`, `updatedAt`, `title`, `company`, `industry`, `country` and `numberOfEmployees` and this instance may not have that field. |
+| 1006 | Field not found | Can arrive response-level (`errors[]`) or record-level (`status: "skipped"`, `reasons[]`). Handle both: name the field. If it is in `lead_fields`, say to fix `lead_fields` in the config. A field mkto added itself is dropped and the lookup retried (see [optional fields](#optional-fields) under Endpoints); if the field is `id`, `email`, `firstName` or `lastName` (or the name can't be matched), say mkto needs `id`, `email`, `firstName` and `lastName` (the lookup key and the redaction guard) and this instance may not have that field. |
 | other | — | Show code and message, exit 1. |
 
-Also handle non-200 HTTP statuses, timeouts (30 s per request), and non-JSON bodies (`unexpected non-JSON response from Marketo (HTTP <status>)`, never dump the body). Backoff sleeps stop at once when the context is cancelled (Ctrl-C).
+Also handle non-200 HTTP statuses, timeouts (30 s per request; 120 s for `activities.json`, see Endpoints), and non-JSON bodies (`unexpected non-JSON response from Marketo (HTTP <status>)`, never dump the body). Backoff sleeps stop at once when the context is cancelled (Ctrl-C).
 
 Sources checked 2026-11-07: Adobe Experience League `marketo-developer/marketo/rest/{authentication,rest-api,error-codes,assets/programs}`. Query-param `access_token` support was removed on 2026-08-31.
 
@@ -94,12 +94,16 @@ Sources checked 2026-11-07: Adobe Experience League `marketo-developer/marketo/r
 | Lead by email | `GET /rest/v1/leads.json?filterType=email&filterValues={email}&fields={csv}` | URL-encode the email (`+` addresses!). Can return 0, 1 or several leads (duplicates). |
 | Activity types | `GET /rest/v1/activities/types.json` | Fetch once per run; map name ↔ id. Unknown names from config → warn and skip. |
 | Paging token | `GET /rest/v1/activities/pagingtoken.json?sinceDatetime={RFC3339}` | Start of the requested window. |
-| Activities | `GET /rest/v1/activities.json?nextPageToken={t}&activityTypeIds={ids}&leadIds={id}` | **Max 10 activity type ids per call**: batch them, with a fresh paging token per batch, then merge all batches sorted by `activityDate`. Loop while `moreResult` is true; a page can be empty while `moreResult` is still true. Stop with an error if the same `nextPageToken` repeats or after 1000 pages. Up to 300 results per page. |
-| Program membership | `GET /rest/v1/leads/{id}/programMembership.json` | Returns program ids + progression status. |
-| Program by id | `GET /rest/asset/v1/program/{id}.json` | Resolve membership names. Cache per run; cap at 25 lookups and say so if capped. |
+| Activities | `GET /rest/v1/activities.json?nextPageToken={t}&activityTypeIds={ids}&leadIds={id}` | **Max 10 activity type ids per call**: batch them, with a fresh paging token per batch, then merge all batches sorted by `activityDate`. Loop while `moreResult` is true; a page can be empty while `moreResult` is still true. Stop with an error if the same `nextPageToken` repeats or after 1000 pages. Up to 300 results per page. **120 s per-request limit** (every other call keeps 30 s): Marketo scans instance-wide web traffic for Visit Webpage and Click Link, and on a real instance (2026-11-07) a 7-day page took up to 29 s while a 30-day page passed 30 s. A page slower than 5 s prints `scanning activity: page <n> took <s>s (web visits and link clicks are slow on large Marketo instances)` to stderr, with or without `--verbose`. |
+| Program membership | `GET /rest/v1/leads/{id}/programMembership.json` | Returns program ids + progression status. The membership date is `membershipDate`, falling back to `updatedAt` (unconfirmed on a real instance; parsed like asset-API dates). |
+| Program by id | `GET /rest/asset/v1/program/{id}.json` | Resolve names of the shown memberships only; only the name is decoded, so a date-shape change can't break it. Cache per run; cap at 25 lookups and say so if capped. Failed lookups give one warning per run: `warning: could not look up <n> of <m> program names (<reason>)`, where the reason is `check the API user's asset permissions` for 603 or HTTP 401/403, `unexpected response format from Marketo; please report it` for a decode error, else the error text. Quota exhaustion and Ctrl-C still stop the command. |
 | Programs | `GET /rest/asset/v1/programs.json?maxReturn=200&offset={n}` | Page by offset until an empty result (don't rely on warning code 702). There is no multi-id lookup, so the 25-lookup cap above stays. |
 | Usage today | `GET /rest/v1/stats/usage.json` | Sum `total` (across API users) for today. "Today" is the `America/Chicago` calendar date, because the quota resets at 12:00 AM Central. |
 | Usage, 7 days | `GET /rest/v1/stats/usage/last7days.json` | |
+
+Asset-API dates (`createdAt`, `updatedAt`) are **not** RFC 3339: a real instance (2026-11-07) sent `2026-11-01T01:08:44Z+0000`, a literal `Z` followed by an offset. mkto parses RFC 3339, `…Z+0000` / `…Z-0700` and plain `…+0000` with one helper.
+
+<a id="optional-fields"></a>Fields mkto adds itself (beyond `lead_fields`) can be missing on an instance: on 1006 for one of them, mkto drops it and retries the lead lookup (once per such field), except `id`, `email`, `firstName` and `lastName`, which it needs (the lookup key and brief's redaction guard); `--verbose` prints `note: field "<f>" isn't on this Marketo instance; skipped`. A real instance (2026-11-07) lacked `numberOfEmployees`. 1006 for a field in `lead_fields` still errors.
 
 Activity records have `activityDate`, `activityTypeId`, `primaryAttributeValue` and an `attributes` list whose names vary by type (e.g. a webpage URL, a link, query parameters, client IP, user agent). Inspect real responses (in a safe environment) and build fixtures from invented values.
 
@@ -119,11 +123,11 @@ Writes the commented template above to the resolved config path (0700 dir, 0600 
 ### `mkto lead <email>`
 Prints the configured `lead_fields` as a two-column table. If several leads match, print each one with its id and a note about duplicates.
 
-### `mkto activity <email> [--days 30] [--types "Open Email,Click Email"] [--all-types] [--lead-id N] [--out FILE]`
+### `mkto activity <email> [--days 30] [--types "Open Email,Click Email"] [--all-types] [--all-programs] [--lead-id N] [--out FILE]`
 - Resolves the lead. With duplicates, pick the most recent `updatedAt`, list the other ids in a note, and point to `--lead-id`.
 - Default window 30 days; `--days` must be ≥ 1 (else exit 2). Above 90, print a quota warning.
 - Default types come from `activity_types` in the config. `--types` overrides; `--all-types` uses every type (warn about quota). `--types` and `--all-types` together → exit 2.
-- Prints a chronological timeline, then a "Programs" section from program membership.
+- Prints a chronological timeline, then a "Programs" section from program membership: only memberships dated within the window, newest first, then `+ <n> older programs (use --all-programs)` when some are hidden. `--all-programs` shows every membership (newest first where dated). If no membership carries a date, all are shown. In `--json`, `programs` is the shown set with a `date` (RFC 3339 UTC, omitted when unknown) and the older-count message goes in `notes`.
 - `--out` writes the output (respecting `--json`) to a file instead of stdout, with mode `0600` (it holds lead data).
 
 Example:

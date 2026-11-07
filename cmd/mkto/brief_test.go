@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -464,5 +465,46 @@ func TestBriefDefaultModel(t *testing.T) {
 	}
 	if !bytes.Contains(ai.Requests()[0].Body, []byte(`"model":"claude-sonnet-5-5"`)) {
 		t.Error("[llm] without model must use the template default")
+	}
+}
+
+func TestBriefSkipsMissingExtraField(t *testing.T) {
+	for _, verbose := range []bool{false, true} {
+		s := briefServer(t, "Contact Us Form")
+		s.Handle(leadsPath, marketotest.Response{Body: `{"success":false,"errors":[{"code":"1006","message":"Field 'numberOfEmployees' not found"}]}`},
+			marketotest.Response{Body: strings.Replace(briefLead, `"numberOfEmployees":250,`, "", 1)})
+		args := []string{"--show-payload"}
+		if verbose {
+			args = append(args, "--verbose")
+		}
+		out, errOut, code := brief(t, s, "", args...)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		if got := s.Hits(leadsPath); got != 2 {
+			t.Errorf("leads hits = %d, want 2 (one retry)", got)
+		}
+		if f := strings.Split(s.Query(leadsPath).Get("fields"), ","); slices.Contains(f, "numberOfEmployees") || !slices.Contains(f, "industry") {
+			t.Errorf("retry fields = %v", f)
+		}
+		if strings.Contains(out, "numberOfEmployees") || !strings.Contains(out, `"company": "Example Corp"`) {
+			t.Errorf("payload:\n%s", out)
+		}
+		note := "note: field \"numberOfEmployees\" isn't on this Marketo instance; skipped\n"
+		if strings.Contains(errOut, note) != verbose {
+			t.Errorf("verbose=%t stderr: %s", verbose, errOut)
+		}
+	}
+}
+
+func TestBriefLeadFieldsMissingStillErrors(t *testing.T) {
+	s := briefServer(t, "Contact Us Form")
+	s.Handle(leadsPath, marketotest.Response{Body: `{"success":false,"errors":[{"code":"1006","message":"Field 'createdAt' not found"}]}`})
+	_, errOut, code := brief(t, s, "", "--show-payload")
+	if code != 1 || !strings.Contains(errOut, `field "createdAt" not found: fix lead_fields in `) {
+		t.Errorf("exit %d, stderr %s", code, errOut)
+	}
+	if got := s.Hits(leadsPath); got != 1 {
+		t.Errorf("leads hits = %d, want 1", got)
 	}
 }
