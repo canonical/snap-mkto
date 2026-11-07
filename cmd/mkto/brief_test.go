@@ -49,7 +49,7 @@ func brief(t *testing.T, s *marketotest.Server, llm string, args ...string) (str
 
 func TestBriefShowPayloadGolden(t *testing.T) {
 	s := briefServer(t, "Contact Us Form")
-	out, errOut, code := brief(t, s, "", "--show-payload") // [llm] absent: enabled=false
+	out, errOut, code := brief(t, s, "", "--show-payload", "--web") // [llm] absent: enabled=false
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -70,7 +70,7 @@ func TestBriefShowPayloadGolden(t *testing.T) {
 }
 
 func TestBriefShowPayloadNoResearch(t *testing.T) {
-	out, errOut, code := brief(t, briefServer(t, "Contact Us Form"), "", "--show-payload", "--no-research")
+	out, errOut, code := brief(t, briefServer(t, "Contact Us Form"), "", "--show-payload", "--no-research", "--web")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -84,14 +84,106 @@ func TestBriefShowPayloadNoResearch(t *testing.T) {
 	}
 }
 
-func TestBriefShowPayloadGuardAbort(t *testing.T) {
+func TestBriefShowPayloadRedacts(t *testing.T) {
 	s := briefServer(t, "Jane Contact Form")
 	out, errOut, code := brief(t, s, "[llm]\nenabled = true\n", "--show-payload")
-	if code != 1 || out != "" {
-		t.Fatalf("exit %d, stdout %q", code, out)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if !strings.Contains(errOut, "events[1].asset") || strings.Contains(errOut, "Jane") {
-		t.Errorf("stderr = %q", errOut)
+	if !strings.HasPrefix(out, "# Redacted before sending: lead's first name in events[1].asset\n# Narrate payload") ||
+		!strings.Contains(out, `"asset": "{redacted} Contact Form"`) {
+		t.Errorf("stdout:\n%s", out)
+	}
+	if strings.Contains(out+errOut, "Jane") {
+		t.Error("output leaks the name")
+	}
+}
+
+// TestBriefShowPayloadURLRedaction: a URL segment ScrubURL replaced is listed, not "nothing".
+func TestBriefShowPayloadURLRedaction(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle(leadsPath, marketotest.Response{Body: briefLead})
+	s.Handle(typesPath, marketotest.Response{Body: "activity_types.json"})
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
+	s.Handle(actsPath, marketotest.Response{Body: `{"success":true,"moreResult":false,"result":[
+{"id":1,"leadId":1001,"activityDate":"2026-11-01T10:20:00Z","activityTypeId":1,"primaryAttributeValue":"www.example.com/u/bob.smith%2540example.org","attributes":[]}]}`})
+	out, errOut, code := brief(t, s, "", "--show-payload", "--web")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !strings.HasPrefix(out, "# Redacted before sending: email or token in URL in events[0].url\n") ||
+		!strings.Contains(out, `"url": "https://www.example.com/u/{redacted}"`) || strings.Contains(out, "bob.smith") {
+		t.Errorf("stdout:\n%s", out)
+	}
+}
+
+func TestBriefOnlyWebTypes(t *testing.T) {
+	s := briefServer(t, "Contact Us Form")
+	out, errOut, code := fakeCLIFull(t, s, fixedNow, "activity_types = [\"Visit Webpage\", \"Click Link\"]\n", "", nil,
+		"brief", "jane.doe@example.com", "--show-payload")
+	if code != 1 || out != "" || errOut != "no activity types left to fetch: activity_types only has web types; add --web to include them\n" {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	}
+	if s.Hits(actsPath) != 0 {
+		t.Error("fetched activities")
+	}
+}
+
+// TestBriefVerboseListsRedactions: a normal run sends the redacted payload and, with --verbose, lists what was replaced.
+func TestBriefVerboseListsRedactions(t *testing.T) {
+	for _, verbose := range []bool{false, true} {
+		s := briefServer(t, "Jane Contact Form")
+		ai := llmtest.New(t, narration(sPricing), llmtest.Message(`{"unsupported":[]}`, 1, 1))
+		args := []string{"--no-research"}
+		if verbose {
+			args = append(args, "--verbose")
+		}
+		out, errOut, code := briefLLM(t, s, ai, true, args...)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		line := "Redacted before sending: lead's first name in events[1].asset\n"
+		if strings.Contains(errOut, line) != verbose {
+			t.Errorf("verbose=%t stderr:\n%s", verbose, errOut)
+		}
+		for i, r := range ai.Requests() {
+			if bytes.Contains(r.Body, []byte("Jane")) {
+				t.Errorf("request %d holds the name", i)
+			}
+		}
+		if strings.Contains(out+errOut, "Jane") {
+			t.Error("output leaks the name")
+		}
+	}
+}
+
+const webNote = "note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them\n"
+
+// TestBriefWebTypes: brief skips Visit Webpage and Click Link unless --web is given.
+func TestBriefWebTypes(t *testing.T) {
+	for _, c := range []struct {
+		name, extra string
+		args        []string
+		web, note   bool
+	}{
+		{"default skips web types", "", nil, false, true},
+		{"--web includes them", "", []string{"--web"}, true, false},
+		{"no note without web types", "activity_types = [\"Fill Out Form\", \"Open Email\"]\n", nil, false, false},
+		{"case-insensitive", "activity_types = [\" visit WEBPAGE \", \"click link\", \"Open Email\"]\n", nil, false, true},
+	} {
+		s := briefServer(t, "Contact Us Form")
+		_, errOut, code := fakeCLIFull(t, s, fixedNow, c.extra, "", nil,
+			append([]string{"brief", "jane.doe@example.com", "--show-payload"}, c.args...)...)
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", c.name, code, errOut)
+		}
+		ids := strings.Split(s.Query(actsPath).Get("activityTypeIds"), ",")
+		if slices.Contains(ids, "1") != c.web || slices.Contains(ids, "3") != c.web {
+			t.Errorf("%s: activityTypeIds = %v", c.name, ids)
+		}
+		if n := strings.Count(errOut, webNote); n != map[bool]int{true: 1, false: 0}[c.note] {
+			t.Errorf("%s: note printed %d times; stderr:\n%s", c.name, n, errOut)
+		}
 	}
 }
 
@@ -165,7 +257,8 @@ func briefLLMIn(t *testing.T, dir string, s *marketotest.Server, ai *llmtest.Ser
 	if ai != nil {
 		e.LLMBaseURL = ai.URL
 	}
-	code := run(append([]string{"--config", p, "brief", "jane.doe@example.com"}, args...), e)
+	// --web: briefActs holds a Visit Webpage row; TestBriefWebTypes covers the default that skips it.
+	code := run(append([]string{"--config", p, "brief", "jane.doe@example.com", "--web"}, args...), e)
 	for _, leak := range []string{briefKey, "TOPSECRET", "s3cret"} {
 		if strings.Contains(out.String()+errb.String(), leak) {
 			t.Errorf("output contains a secret (%d chars)", len(leak))

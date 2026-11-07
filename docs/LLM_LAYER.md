@@ -47,6 +47,8 @@ Always generalise, deterministically, **in code** (sending the raw title to an L
 - Known limit: `company`, `industry` and `country` are free text typed by the lead and are only pattern-checked by the guard, so other people's names and street addresses there pass.
 - Known limit: the lead's own name is matched without Unicode normalisation, so accent variants (e.g. "Zoe" for "Zoë") pass the guard.
 - Known limit: phone numbers split across URL path segments, and doubly-encoded `%2540` inside asset names, are not detected.
+- Known limit: a phone written as a valid date/time on its own (e.g. 2026-10-11 09:00) passes. A phone split across two or more dates (digits, date, digits, date, digits) also passes; only deliberately crafted input looks like that.
+- Known limit: in-place redaction removes only what the detectors find. Undetected personal data in the same value (e.g. a street address next to a redacted name) is sent. Review with `--show-payload` before sign-off.
 - Review the payload with `--show-payload` before data-protection sign-off.
 - For webpage / link activities: keep the URL reduced to scheme + host + path.
 - Drop: all other attributes, including query parameters, client IP, user agent, referrer query strings, search queries.
@@ -55,16 +57,22 @@ Always generalise, deterministically, **in code** (sending the raw title to an L
 
 Parse properly (`net/url`). Drop the query string and fragment (this removes `mkt_tok` tracking tokens and prefilled form values). Then replace any path segment that looks like an email address, or a token-like segment (≥ 24 chars of `[A-Za-z0-9_-]`), with `{redacted}`.
 
-### Final guard (fail closed)
+### Final guard (redact in place, then fail closed)
 
-Serialise the payload and scan it for:
+Scan every value of the payload for:
 
-- email-address patterns
-- phone-like sequences (≥ 9 digits allowing spaces, dots, dashes, parentheses, leading `+`)
+- email-address patterns (including Unicode, `%40`, `(at)`/`[dot]` and spelled-out "at … dot")
+- phone-like sequences (≥ 9 digits allowing spaces, dots, dashes, slashes, parentheses, leading `+`)
 - IPv4 / IPv6 addresses
-- the lead's first name, last name (case-insensitive, length ≥ 3) and the local part of their email. `brief` always fetches `firstName`, `lastName` and `email` for this check, even when they aren't in `lead_fields`.
+- the lead's first name, last name (case-insensitive, length ≥ 3), first and last name joined, and the local part of their email. `brief` always fetches `firstName`, `lastName` and `email` for this check, even when they aren't in `lead_fields`.
 
-Any hit → abort with an error naming the field where it was found, **never the value**.
+Each hit is replaced in place: exactly the matched span becomes `{redacted}` and the rest of the value is kept (`Follow-up for Jane` → `Follow-up for {redacted}`). Then the full guard runs again on the result, up to 3 passes. If a hit survives, abort with an error naming the kind and the field, **never the value**. `Payload.Redactions()` lists what was replaced (kind and JSON path, never the value); `--show-payload` prints it as a `# Redacted before sending: …` line, and `--verbose` prints it on a normal run. The research query comes from the already-redacted lead fields (`Jane's Bakery` → `{redacted}'s Bakery`).
+
+Dates and times are not phones. Before the phone search, dates (`2026-10-11`, optionally with ` 01:20:10` or `T01:20:10.123+02:00`) and standalone times (`9:00`, `10:30:15`) are cut out, so their own digits don't count toward the 9. Only years 19xx/20xx and valid months, days, hours and minutes count as a date or time, and one directly next to another digit or `:` stays in the search. The digit runs directly around a cut date or time (joined to it through phone separators) are still added up: 9+ digits there make the runs and the date one phone (`555-0100 2026-10-11 199` → `{redacted}`).
+
+URL path segments that `ScrubURL` replaced (an email or a token) are listed too, as `email or token in URL`. A `{redacted}` marker is never matched as the lead's name (a lead called Red Acted).
+
+Decided by Erekle 2026-11-08 after a real-instance false positive: asset names like `Validation Report 2026-10-11 01:20:10.Email 1` were read as a phone number and the whole brief aborted.
 
 ### Type enforcement
 
@@ -74,8 +82,10 @@ Any hit → abort with an error naming the field where it was found, **never the
 
 - email inside a URL path; `mkt_tok` in a query string; prefilled form URL with email in the query
 - phone number in a custom field (dropped by the allowlist)
-- lead's first name inside an email asset name, e.g. "Follow-up for Jane" when the lead is Jane → guard aborts
-- IP in an attribute (dropped) and IP pasted into an asset name (guard aborts)
+- lead's first name inside an email asset name, e.g. "Follow-up for Jane" when the lead is Jane → `Follow-up for {redacted}`
+- IP in an attribute (dropped) and IP pasted into an asset name (redacted in place)
+- a date-time in an asset name is kept; a phone next to a date is redacted and the date kept
+- a broken redactor (test hook) makes `Build` fail closed
 - title bucket mapping, including unknown titles
 - the research query contains only company, industry, country
 
@@ -101,8 +111,10 @@ Lives in the config directory (`~/snap/mkto/common/playbook.md` under the snap).
 ## CLI
 
 ```
-mkto brief <email> [--days 90] [--lead-id N] [--no-research] [--show-payload] [--save] [--json]
+mkto brief <email> [--days 90] [--lead-id N] [--no-research] [--show-payload] [--save] [--web] [--json]
 ```
+
+- By default `brief` skips the web activity types: "Visit Webpage" and "Click Link" (any case) are left out of `activity_types` for the fetch, and one stderr note says so: `note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them`. They make Marketo scan instance-wide web traffic (25–31 s a page on a real instance, 2026-11-08). `--web` includes them; `--show-payload` honours it. `mkto activity` is unchanged.
 
 - Refuse to run unless `[llm] enabled = true`, with a message pointing to this doc's sign-off section.
 - `--show-payload`: run fetch + redact, print the narrate payload and the research query (omitted with `--no-research`) exactly as they would be sent, send nothing, exit 0. Works even when `enabled = false`. It can't be combined with `--save` (exit 2).

@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -67,13 +68,13 @@ func TestBuildFullPayload(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		act     marketo.Activity
-		want    string // a fragment the payload must contain
-		wantErr string
+		name string
+		act  marketo.Activity
+		want string // a fragment the payload must contain
+		kind string // the one redaction expected in events[0], if any
 	}{
 		{name: "email inside a URL path", act: act(1, 3, at(1, 9, 0), "https://www.example.com/u/jane.doe@example.com/prefs", nil),
-			want: `"url":"https://www.example.com/u/{redacted}/prefs"`},
+			want: `"url":"https://www.example.com/u/{redacted}/prefs"`, kind: "email or token in URL"},
 		{name: "mkt_tok in a query string", act: act(1, 3, at(1, 9, 0), "https://www.example.com/pricing?mkt_tok=MDAwLUFCQy0xMjMAAAGExampleTok", nil),
 			want: `"url":"https://www.example.com/pricing"}`},
 		{name: "prefilled form URL with email in the query", act: act(1, 1, at(1, 9, 0), "www.example.com/contact?email=jane.doe%40example.com", nil),
@@ -81,7 +82,7 @@ func TestBuild(t *testing.T) {
 		{name: "userinfo URL", act: act(1, 3, at(1, 9, 0), "https://jane:s3cret@www.example.com/a", nil),
 			want: `"url":"https://www.example.com/a"}`},
 		{name: "token segment", act: act(1, 3, at(1, 9, 0), "https://www.example.com/r/AbCdEfGhIjKlMnOpQrStUvWx/next", nil),
-			want: `"url":"https://www.example.com/r/{redacted}/next"}`},
+			want: `"url":"https://www.example.com/r/{redacted}/next"}`, kind: "email or token in URL"},
 		{name: "schemeless URL with a URL in its query", act: act(1, 1, at(1, 9, 0), "www.example.com/go?next=https://x.example.com", nil),
 			want: `"url":"https://www.example.com/go"}`},
 		{name: "dated path", act: act(1, 1, at(1, 9, 0), "www.example.com/blog/2026/10/03/1", nil),
@@ -93,9 +94,9 @@ func TestBuild(t *testing.T) {
 		{name: "event path", act: act(1, 1, at(1, 9, 0), "www.example.com/events/2026/123456", nil),
 			want: `"url":"https://www.example.com/events/2026/123456"}`},
 		{name: "phone as a URL segment", act: act(1, 1, at(1, 9, 0), "www.example.com/call/+44-20-7946-0958", nil),
-			wantErr: "redaction guard: phone number found in events[0].url; nothing was sent"},
+			want: `"url":"https://www.example.com/call/{redacted}"}`, kind: "phone number"},
 		{name: "phone with a slash in an asset", act: act(1, 10, at(1, 9, 0), "Tel 030/12345678", nil),
-			wantErr: "redaction guard: phone number found in events[0].asset; nothing was sent"},
+			want: `"asset":"Tel {redacted}"}`, kind: "phone number"},
 		{name: "unparseable URL keeps type and date", act: act(1, 3, at(1, 9, 0), "/relative?x=1", nil),
 			want: `{"id":"E1","date":"2026-10-01T09:00:00Z","type":"Click Link"}`},
 		{name: "IP in an attribute is dropped", act: act(1, 10, at(1, 9, 0), "November Newsletter", map[string]any{"Client IP Address": "192.0.2.10"}),
@@ -109,19 +110,11 @@ func TestBuild(t *testing.T) {
 		{name: "ISO date not flagged as a phone", act: act(1, 7, at(3, 9, 59), "November Newsletter", nil),
 			want: `"date":"2026-10-03T09:00:00Z"`},
 		{name: "first name inside an email asset name", act: act(1, 10, at(1, 9, 0), "Follow-up for Jane", nil),
-			wantErr: "redaction guard: lead's first name found in events[0].asset; nothing was sent"},
+			want: `"asset":"Follow-up for {redacted}"}`, kind: "lead's first name"},
 		{name: "IP pasted into an asset name", act: act(1, 10, at(1, 9, 0), "Webinar 192.0.2.55 recap", nil),
-			wantErr: "redaction guard: IP address found in events[0].asset; nothing was sent"},
+			want: `"asset":"Webinar {redacted} recap"}`, kind: "IP address"},
 	} {
 		p, err := Build(lead(), []marketo.Activity{tc.act}, types)
-		if tc.wantErr != "" {
-			if err == nil || err.Error() != tc.wantErr {
-				t.Errorf("%s: error = %v, want %q", tc.name, err, tc.wantErr)
-			} else if strings.Contains(err.Error(), tc.act.Primary) || strings.Contains(err.Error(), "192.0.2.55") || strings.Contains(err.Error(), "Jane") {
-				t.Errorf("%s: error leaks the value", tc.name)
-			}
-			continue
-		}
 		if err != nil {
 			t.Errorf("%s: unexpected error: %v", tc.name, err)
 			continue
@@ -130,7 +123,14 @@ func TestBuild(t *testing.T) {
 		if !strings.Contains(got, tc.want) {
 			t.Errorf("%s: payload %s does not contain %s", tc.name, got, tc.want)
 		}
-		for _, leak := range []string{"192.0.2.10", "jane", "Jane", "Doe", "s3cret", "+44", "Berlin", "Example Street", "10115", "AbCdEfGh", "mkt_tok", "?"} {
+		var want []Redaction
+		if tc.kind != "" {
+			want = []Redaction{{tc.kind, "events[0]." + map[bool]string{true: "url", false: "asset"}[strings.Contains(tc.want, `"url"`)]}}
+		}
+		if r := p.Redactions(); !slices.Equal(r, want) {
+			t.Errorf("%s: Redactions = %v, want %v", tc.name, r, want)
+		}
+		for _, leak := range []string{"192.0.2.10", "192.0.2.55", "12345678", "jane", "Jane", "Doe", "s3cret", "+44", "Berlin", "Example Street", "10115", "AbCdEfGh", "mkt_tok", "?"} {
 			if strings.Contains(got, leak) {
 				t.Errorf("%s: payload leaks %q: %s", tc.name, leak, got)
 			}
@@ -148,11 +148,77 @@ func TestBuildDropsUnknownLeadFields(t *testing.T) {
 	}
 }
 
-func TestBuildGuardsTheLeadProfile(t *testing.T) {
+func TestBuildRedactsTheLeadProfile(t *testing.T) {
 	l := lead()
 	l["industry"] = "Call 555-010-0199 x"
-	_, err := Build(l, nil, types)
-	if err == nil || err.Error() != "redaction guard: phone number found in lead.industry; nothing was sent" {
+	p, err := Build(l, nil, types)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(p.JSON()); !strings.Contains(got, `"industry":"Call {redacted} x"`) || strings.Contains(got, "0199") {
+		t.Errorf("payload %s", got)
+	}
+	if r := p.Redactions(); !slices.Equal(r, []Redaction{{"phone number", "lead.industry"}}) {
+		t.Errorf("Redactions = %v", r)
+	}
+}
+
+// TestBuildRedactsInPlace: every hit is replaced, the rest kept, and Redactions lists kind and path.
+func TestBuildRedactsInPlace(t *testing.T) {
+	l := lead()
+	l["company"] = "Jane's Bakery"
+	acts := []marketo.Activity{
+		act(1, 10, at(1, 9, 0), "Validation Report 2026-10-11 01:20:10.Email 1", nil),
+		act(2, 10, at(2, 9, 0), "Call 555-010-0199 after 2026-10-11 09:00", nil),
+		act(3, 7, at(3, 9, 0), "Invite for bob.smith@example.org (EMEA)", nil),
+		act(4, 7, at(4, 9, 0), "Follow-up for Jane", nil),
+		act(5, 7, at(5, 9, 0), "Webinar 2001:db8::7 replay", nil),
+		act(6, 7, at(6, 9, 0), "+44 20 7946 0958", nil),
+	}
+	p, err := Build(l, acts, types)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(p.JSON())
+	for _, want := range []string{
+		`"company":"{redacted}'s Bakery"`,
+		`"asset":"Validation Report 2026-10-11 01:20:10.Email 1"`,
+		`"asset":"Call {redacted} after 2026-10-11 09:00"`,
+		`"asset":"Invite for {redacted} (EMEA)"`,
+		`"asset":"Follow-up for {redacted}"`,
+		`"asset":"Webinar {redacted} replay"`,
+		`"type":"Email Delivered","asset":"{redacted}"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("payload lacks %s:\n%s", want, got)
+		}
+	}
+	if q := string(p.Company().JSON()); q != `{"company":"{redacted}'s Bakery","industry":"Software","country":"Germany"}` {
+		t.Errorf("company query %s", q)
+	}
+	for _, leak := range []string{"Jane", "555-010", "0199", "bob.smith", "example.org", "2001:db8", "+44", "7946"} {
+		if strings.Contains(got, leak) || strings.Contains(string(p.Company().JSON()), leak) {
+			t.Errorf("payload leaks %q", leak)
+		}
+	}
+	want := []Redaction{
+		{"lead's first name", "lead.company"}, {"phone number", "events[1].asset"}, {"email address", "events[2].asset"},
+		{"lead's first name", "events[3].asset"}, {"IP address", "events[4].asset"}, {"phone number", "events[5].asset"},
+	}
+	if r := p.Redactions(); !slices.Equal(r, want) {
+		t.Errorf("Redactions =\n%v\nwant\n%v", r, want)
+	}
+	if clean, _ := Build(lead(), nil, types); len(clean.Redactions()) != 0 {
+		t.Errorf("clean payload Redactions = %v", clean.Redactions())
+	}
+}
+
+// TestBuildFailsClosed: if a hit survives redaction, Build aborts naming kind and path, never the value.
+func TestBuildFailsClosed(t *testing.T) {
+	defer func(f func(detector, string, string) (string, []string)) { redactFn = f }(redactFn)
+	redactFn = func(_ detector, _, s string) (string, []string) { return s, nil } // a broken redactor
+	_, err := Build(lead(), []marketo.Activity{act(1, 10, at(1, 9, 0), "Follow-up for Jane", nil)}, types)
+	if err == nil || err.Error() != "redaction guard: lead's first name found in events[0].asset; nothing was sent" {
 		t.Fatalf("error = %v", err)
 	}
 }

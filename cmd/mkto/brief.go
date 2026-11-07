@@ -47,6 +47,7 @@ func newBriefCmd(env Env) *cobra.Command {
 	f.Bool("show-payload", false, "print what would be sent to the LLM and send nothing")
 	f.Bool("no-research", false, "skip the company research step")
 	f.Bool("save", false, "also write the brief to briefs/ in the config directory (mode 0600)")
+	f.Bool("web", false, "include Visit Webpage and Click Link (slow on large Marketo instances)")
 	return cmd
 }
 
@@ -108,7 +109,20 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
-	typeIDs, unknown := marketo.ResolveTypes(all, cfg.Marketo.ActivityTypes)
+	names := cfg.Marketo.ActivityTypes
+	if web, _ := f.GetBool("web"); !web {
+		names = slices.DeleteFunc(slices.Clone(names), func(n string) bool {
+			n = strings.ToLower(strings.TrimSpace(n))
+			return n == "visit webpage" || n == "click link"
+		})
+		if len(names) == 0 && len(cfg.Marketo.ActivityTypes) > 0 {
+			return errors.New("no activity types left to fetch: activity_types only has web types; add --web to include them")
+		}
+		if len(names) < len(cfg.Marketo.ActivityTypes) {
+			fmt.Fprintln(env.Stderr, "note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them")
+		}
+	}
+	typeIDs, unknown := marketo.ResolveTypes(all, names)
 	for _, n := range unknown {
 		fmt.Fprintf(env.Stderr, "warning: unknown activity type %q skipped; check activity_types in %s\n", output.Clean(strings.TrimSpace(n)), cfgPath)
 	}
@@ -129,10 +143,13 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 		return err // names the field, never the value
 	}
 	if !show {
+		if v, _ := f.GetBool("verbose"); v {
+			fmt.Fprintln(env.Stderr, redactedLine(p))
+		}
 		return writeBrief(cmd, env, prov, p, days, lead.ID(), filepath.Dir(cfgPath))
 	}
 	var buf bytes.Buffer
-	buf.WriteString("# Narrate payload (would be sent to the LLM)\n")
+	buf.WriteString("# " + redactedLine(p) + "\n# Narrate payload (would be sent to the LLM)\n")
 	buf.Write(indent(p.JSON()))
 	if noResearch, _ := f.GetBool("no-research"); !noResearch {
 		buf.WriteString("\n\n# Research query (would be sent to the LLM with web search)\n")
@@ -141,6 +158,15 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 	buf.WriteString("\n")
 	_, err = env.Stdout.Write(buf.Bytes())
 	return err
+}
+
+// redactedLine lists the kinds and paths Build replaced, never the values.
+func redactedLine(p redact.Payload) string {
+	var parts []string
+	for _, r := range p.Redactions() {
+		parts = append(parts, r.Kind+" in "+r.Path)
+	}
+	return "Redacted before sending: " + cmp.Or(strings.Join(parts, ", "), "nothing")
 }
 
 // removedClaim is a sentence dropped by the citation check or by verify.

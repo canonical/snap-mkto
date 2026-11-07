@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package redact is the only path from Marketo data to an LLM. It builds
-// payloads from an allowlist of fields and runs a fail-closed guard over them.
+// payloads from an allowlist of fields, redacts personal data left in them in
+// place, and runs a fail-closed guard over the result.
 package redact
 
 import (
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,9 +39,14 @@ type profile struct {
 
 // Payload is a redacted lead profile and timeline. Only Build makes one.
 type Payload struct {
-	lead   profile
-	events []Event
+	lead       profile
+	events     []Event
+	redactions []Redaction
 }
+
+// Redaction says what kind of data was replaced with {redacted}, and where
+// (a JSON path such as events[0].asset). It never holds the value.
+type Redaction struct{ Kind, Path string }
 
 // CompanyQuery is what company research may see. Only Payload.Company makes one.
 type CompanyQuery struct {
@@ -56,7 +63,9 @@ var assetTypes = map[string]bool{
 var urlTypes = map[string]bool{"visit webpage": true, "click link": true}
 
 // Build redacts a lead and its activities. types maps activity type id to name.
-// It fails if the guard finds anything that looks personal in the result.
+// Personal data left in a value (an email, phone, IP or the lead's name) is
+// replaced in place with {redacted}; Build fails only if the guard still finds
+// some after that.
 func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string) (Payload, error) {
 	p := Payload{lead: profile{
 		Company:  field(l, "company"),
@@ -94,14 +103,52 @@ func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string) (Paylo
 		p.events = append(p.events, e)
 	}
 
-	if err := guard(p.JSON(), l); err != nil {
-		return Payload{}, err
+	d := newDetector(l)
+	var err error
+	add := func(r Redaction) {
+		if !slices.Contains(p.redactions, r) {
+			p.redactions = append(p.redactions, r)
+		}
 	}
-	return p, nil
+	for pass := range 3 { // one pass should do; more cover a replacement that exposes a new hit
+		for _, lf := range p.leaves() {
+			if pass == 0 && strings.HasSuffix(lf.path, ".url") && strings.Contains(*lf.s, "{redacted}") {
+				add(Redaction{"email or token in URL", lf.path}) // ScrubURL replaced a segment
+			}
+			var kinds []string
+			*lf.s, kinds = redactFn(d, lf.path, *lf.s)
+			for _, k := range kinds {
+				add(Redaction{k, lf.path})
+			}
+		}
+		if err = d.guard(p.JSON()); err == nil {
+			return p, nil
+		}
+	}
+	return Payload{}, err
 }
 
+// leaf is one string value of the payload and its JSON path.
+type leaf struct {
+	path string
+	s    *string
+}
+
+func (p *Payload) leaves() []leaf {
+	ls := []leaf{{"lead.company", &p.lead.Company}, {"lead.industry", &p.lead.Industry},
+		{"lead.country", &p.lead.Country}, {"lead.role", &p.lead.Role}}
+	for i := range p.events {
+		e, pre := &p.events[i], fmt.Sprintf("events[%d].", i)
+		ls = append(ls, leaf{pre + "id", &e.ID}, leaf{pre + "type", &e.Type}, leaf{pre + "asset", &e.Asset}, leaf{pre + "url", &e.URL})
+	}
+	return ls
+}
+
+// Redactions lists what Build replaced, in payload order; empty if nothing was.
+func (p Payload) Redactions() []Redaction { return slices.Clone(p.redactions) }
+
 // Company returns the company research query: company, industry and country
-// from the already-guarded payload, nothing else.
+// from the already-redacted payload, nothing else.
 func (p Payload) Company() CompanyQuery {
 	return CompanyQuery{p.lead.Company, p.lead.Industry, p.lead.Country}
 }

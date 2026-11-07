@@ -69,6 +69,7 @@ Add `--json` to any data command (lead, activity, programs, quota, version, brie
 - **Off by default.** Get data-protection sign-off before using it with real leads (see `docs/LLM_LAYER.md`), then set `[llm] enabled = true` and `api_key` (or `MKTO_LLM_API_KEY`).
 - **Review first.** `mkto brief <email> --show-payload` prints exactly what would be sent and sends nothing. It works while `enabled = false`.
 - **Playbook.** Offerings come only from `playbook.md` in the config directory (`~/snap/mkto/common/playbook.md` under the snap, `~/.config/mkto/playbook.md` from source). Copy `PLAYBOOK.example.md` to start. Without it, the pitch step is skipped.
+- `--web` adds web visits and link clicks, which `brief` skips by default because they are slow on large instances.
 - `--no-research` skips the company web search. `--save` also writes the brief to `briefs/<UTC time>-<lead id>.md` in the config directory (mode 0600). `--json` gives the full result as JSON.
 
 ```bash

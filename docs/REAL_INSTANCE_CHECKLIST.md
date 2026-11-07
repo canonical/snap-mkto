@@ -62,7 +62,13 @@ These fixtures were written from the docs without a real response. Report pass/f
 - Asset-API dates are `2026-11-01T01:08:44Z+0000` (Z plus offset), not RFC 3339. Program names failed to decode until this was handled. Next run: check program names show in `mkto activity` and `mkto programs` lists programs.
 - `numberOfEmployees` isn't on that instance (1006 on `mkto brief`); mkto now skips its own optional fields when missing. Next run: `mkto brief <email> --show-payload --verbose` shows the `note: field "numberOfEmployees"` line and succeeds.
 - "Interesting Moment" isn't an activity type there; it was removed from the default `activity_types`.
-- Still to confirm: **membership dates** (`membershipDate` / `updatedAt` on `programMembership.json`) and their format. On the next run, the Programs section of `mkto activity` should list only programs joined within `--days`, newest first, with a `+ <n> older programs` line; if it lists every program with no older line, Marketo sent no usable date. Report which, and paste the date shape from one membership row if possible.
+- Still to confirm: **membership dates** (`membershipDate` / `updatedAt` on `programMembership.json`) and their format. On the next run, the Programs section of `mkto activity` should list only programs joined within `--days`, newest first, with a `+ <n> older programs` line; if it lists every program with no older line, Marketo sent no usable date. Report which, and paste the date shape from one membership row if possible. **Confirmed 2026-11-08**, see below.
+
+**Confirmed on the 2026-11-08 run** (real production instance):
+
+- Membership dates work: the Programs window showed 4 recent programs and `+ 110 older`.
+- Web types are the slow part: `mkto brief <email> --show-payload` over 90 days took about 11 minutes, 24 activities pages at 25–31 s each, all from Visit Webpage and Click Link (email types page in about 3 s). `brief` now skips those two types unless `--web` is given, with one stderr note. Next run: check the default brief finishes in well under a minute and prints the note.
+- Date-time false positive: the run aborted with `redaction guard: phone number found in events[0].asset` because asset names like `<program>.Validation Report 2026-10-11 01:20:10.Email 1` hold a date-time whose digits the phone rule counted. Fixed: dates and times are cut out of the phone search, and the guard now redacts hits in place instead of aborting. Next run: `--show-payload` succeeds, keeps those asset names whole, and prints a `# Redacted before sending: …` line.
 
 Also report: any message mentioning `unexpected non-JSON response`, any retry notice in `--verbose` (606/615/713/502), and anything that worked with `go run` but not in the snap.
 

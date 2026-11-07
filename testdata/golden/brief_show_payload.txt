@@ -1,3 +1,4 @@
+# Redacted before sending: nothing
 # Narrate payload (would be sent to the LLM)
 {
   "lead": {
