@@ -31,12 +31,12 @@ Work top to bottom. Tick each box when the task is done and tested. Phases 0–1
 
 - [x] `snap/snapcraft.yaml` (core26, strict, go plugin, plugs `network` + `home`)
 - [x] `snapcraft pack` succeeds in LXD
-- [ ] `sudo snap install --dangerous ./mkto_*.snap`
-- [ ] Under confinement: `mkto init` writes to `~/snap/mkto/common/config.toml` with 0600
-- [ ] Under confinement: every command works against a real instance (read-only)
-- [ ] `--out ~/some-file.json` works (home plug); confirm `/tmp` output is private to the snap and document it
-- [ ] Check `journalctl` / `snappy-debug` for AppArmor denials; fix or document each one
-- [ ] Update SNAP_PACKAGING.md with the verified snapcraft.yaml, commands and sample output
+- [x] `sudo snap install --dangerous ./mkto_*.snap`
+- [x] Under confinement: `mkto init` writes to `~/snap/mkto/common/config.toml` with 0600
+- [x] Under confinement: every command works against a real instance (read-only)
+- [x] `--out ~/some-file.json` works (home plug); confirm `/tmp` output is private to the snap and document it
+- [x] Check `journalctl` / `snappy-debug` for AppArmor denials; fix or document each one
+- [x] Update SNAP_PACKAGING.md with the verified snapcraft.yaml, commands and sample output
 - [ ] README.md matches reality
 - [x] Add the `snap` job to CI; add `source-code` and `issues` to snapcraft.yaml (see docs/REPO.md)
 - [ ] Tag `v0.1.0` and create a GitHub release with the snap attached

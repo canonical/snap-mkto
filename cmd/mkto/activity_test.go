@@ -224,6 +224,40 @@ func TestActivityOutFile(t *testing.T) {
 	}
 }
 
+func TestActivityOutSnapPermissionHint(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"activity", "jane.doe@example.com", "--out", filepath.Join(dir, ".b5.txt")}
+	_, errOut, code := fakeCLIFull(t, activityServer(t), fixedNow, "", "", map[string]string{"SNAP_NAME": "mkto"}, args...)
+	if code != 1 || !strings.Contains(errOut, "permission denied; the mkto snap can write only to non-hidden paths in your home folder (home plug), e.g. ~/b5.txt") {
+		t.Errorf("exit %d, stderr %q", code, errOut)
+	}
+	// Outside the snap the plain error stays.
+	_, errOut, _ = fakeCLIFull(t, activityServer(t), fixedNow, "", "", nil, args...)
+	if strings.Contains(errOut, "home plug") {
+		t.Errorf("hint shown outside the snap: %q", errOut)
+	}
+}
+
+func TestSnapTmpNote(t *testing.T) {
+	for _, c := range []struct{ snap, path, want string }{
+		{"mkto", "/tmp/b5.txt", "note: /tmp is private to the mkto snap; the file is at /tmp/snap-private-tmp/snap.mkto/tmp/b5.txt (readable with sudo)"},
+		{"mkto", "/tmp/sub/b5.txt", "note: /tmp is private to the mkto snap; the file is at /tmp/snap-private-tmp/snap.mkto/tmp/sub/b5.txt (readable with sudo)"},
+		{"mkto", "/home/jane/b5.txt", ""},
+		{"mkto", "/tmpfoo/b5.txt", ""},
+		{"", "/tmp/b5.txt", ""},
+	} {
+		if got := snapTmpNote(c.snap, c.path); got != c.want {
+			t.Errorf("snapTmpNote(%q, %q) = %q, want %q", c.snap, c.path, got, c.want)
+		}
+	}
+}
+
 func TestActivityHelpMentionsRetention(t *testing.T) {
 	out, _, code := exec(t, nil, "activity", "--help")
 	if code != 0 || !strings.Contains(out, "Marketo purges some high-volume activity types after a limited period, so an empty result for an older window isn't necessarily an error.") {

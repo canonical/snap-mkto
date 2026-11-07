@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -204,6 +206,10 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	// Tighten the mode before any lead data lands: OpenFile keeps the mode of an existing file.
 	file, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
+		if env.Getenv("SNAP_NAME") != "" && errors.Is(err, fs.ErrPermission) {
+			return fmt.Errorf("%w; the mkto snap can write only to non-hidden paths in your home folder (home plug), e.g. ~/%s",
+				err, strings.TrimLeft(filepath.Base(outPath), "."))
+		}
 		return err
 	}
 	if err := file.Chmod(0o600); err != nil {
@@ -214,7 +220,23 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 		file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if abs, err := filepath.Abs(outPath); err == nil {
+		if note := snapTmpNote(env.Getenv("SNAP_NAME"), abs); note != "" {
+			fmt.Fprintln(env.Stderr, output.Clean(note))
+		}
+	}
+	return nil
+}
+
+// snapTmpNote explains where a /tmp file really went: a strict snap gets a private /tmp.
+func snapTmpNote(snap, abs string) string {
+	if snap == "" || !strings.HasPrefix(abs, "/tmp/") {
+		return ""
+	}
+	return fmt.Sprintf("note: /tmp is private to the %s snap; the file is at /tmp/snap-private-tmp/snap.%s%s (readable with sudo)", snap, snap, abs)
 }
 
 // windowPrograms returns the memberships to show, newest first (undated last), and how

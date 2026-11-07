@@ -70,6 +70,11 @@ These fixtures were written from the docs without a real response. Report pass/f
 - Web types are the slow part: `mkto brief <email> --show-payload` over 90 days took about 11 minutes, 24 activities pages at 25–31 s each, all from Visit Webpage and Click Link (email types page in about 3 s). `brief` now skips those two types unless `--web` is given, with one stderr note. Next run: check the default brief finishes in well under a minute and prints the note.
 - Date-time false positive: the run aborted with `redaction guard: phone number found in events[0].asset` because asset names like `<program>.Validation Report 2026-10-11 01:20:10.Email 1` hold a date-time whose digits the phone rule counted. Fixed: dates and times are cut out of the phone search, and the guard now redacts hits in place instead of aborting. Next run: `--show-payload` succeeds, keeps those asset names whole, and prints a `# Redacted before sending: …` line.
 
+**Confirmed on the 2026-11-08 follow-up run:**
+
+- The default `brief --show-payload` (web types skipped) finished quickly, printed the skip note, kept the `Validation Report <date-time>` asset names whole and printed `# Redacted before sending: nothing`.
+- Confinement (Part A and B5): plugs connected, config 600, no AppArmor denials for `snap.mkto`, `--out` to home works, `/tmp` is snap-private, hidden home files are denied. mkto now explains the last two in its output (a note for `/tmp`, a hint in the permission error).
+
 Also report: any message mentioning `unexpected non-JSON response`, any retry notice in `--verbose` (606/615/713/502), and anything that worked with `go run` but not in the snap.
 
 ## Uninstall

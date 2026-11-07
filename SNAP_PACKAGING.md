@@ -2,7 +2,7 @@
 
 How to build, install and run mkto as a strictly confined snap.
 
-> **Status (2026-11-07):** `snap/snapcraft.yaml` is final for v0.1.0 and `snapcraft pack` is verified: it builds in LXD and the file layout below is checked with `unsquashfs`. Install and behaviour under confinement are **not yet verified**; see [Pending Erekle's confinement run](#pending-erekles-confinement-run). Statements that rely on that run are marked *(pending)*.
+> **Status (2026-11-08):** `snap/snapcraft.yaml` is final for v0.1.0. `snapcraft pack` is verified (LXD build, file layout checked with `unsquashfs`), and install plus behaviour under strict confinement are verified on Ubuntu with a real Marketo instance; see [Verified confinement run](#verified-confinement-run-2026-11-08).
 
 ## Prerequisites
 
@@ -153,7 +153,7 @@ $ SNAP_NAME=mkto SNAP_REVISION=x1 ./squashfs-root/bin/mkto version --json
 | Plug | Why | Connection |
 |---|---|---|
 | `network` | Marketo REST API, and the LLM API for `mkto brief` (off by default) | Auto-connects |
-| `home` | Only for `--out` files in your home folder. The config does **not** need it. | Auto-connects on classic Ubuntu; on Ubuntu Core run `sudo snap connect mkto:home` *(pending: confirm with `snap connections mkto`)* |
+| `home` | Only for `--out` files in your home folder. The config does **not** need it. | Auto-connects on classic Ubuntu; on Ubuntu Core run `sudo snap connect mkto:home` (verified 2026-11-08: `snap connections mkto` shows both connected) |
 
 What `home` allows comes from the AppArmor rules snapd 2.78 generates for it. These lines are copied verbatim from a generated profile on the build machine (`/var/lib/snapd/apparmor/profiles/`):
 
@@ -173,7 +173,7 @@ owner @{HOME}/sna[^p]**           rwklix,
 owner @{HOME}/snap[^/]**          rwklix,
 ```
 
-In short (a paraphrase): read/write anywhere under your home folder except `~/snap/` and names starting with a dot at the top level. So `--out ~/report.json` and `--out ~/Documents/report.json` work, and `--out ~/.report.json` or anything under `~/.config/` is denied.
+In short (a paraphrase): read/write anywhere under your home folder except `~/snap/` and names starting with a dot at the top level. So `--out ~/report.json` and `--out ~/Documents/report.json` work, and `--out ~/.report.json` or anything under `~/.config/` is denied. The denial is silent in the kernel log (snapd uses a quiet `deny` rule), so inside the snap mkto adds the reason to the error: `…: permission denied; the mkto snap can write only to non-hidden paths in your home folder (home plug), e.g. ~/report.json`.
 
 ## Where files live under strict confinement
 
@@ -181,7 +181,7 @@ In short (a paraphrase): read/write anywhere under your home folder except `~/sn
 - mkto keeps its config in `$SNAP_USER_COMMON` instead → **`~/snap/mkto/common/config.toml`**, so credentials exist once and survive refreshes and reverts. `mkto brief` keeps its files there too: `playbook.md` (your private offerings, never built into the snap), `prompts/` (optional prompt overrides) and `briefs/` (written by `--save`: the directory is created 0700 and each brief is 0600, never overwritten; mkto refuses to save through a symlinked `briefs/`). These need no new plugs: the LLM calls use the existing `network` plug.
 - `mkto init` writes the config file with mode **0600**. It doesn't change the mode of an existing directory: snapd creates `~/snap/mkto/common/` before mkto runs, so that directory keeps whatever mode snapd gave it. mkto only sets 0700 on a directory it creates itself (for example `~/.config/mkto/` from source); it leaves existing directories alone because `--config` may point into a directory the user chose. Other local users may see that `config.toml` exists, but the 0600 file mode keeps them from reading it.
 - Run from source, the config is at `~/.config/mkto/config.toml`.
-- `/tmp` inside the snap is private to the snap: `--out /tmp/x` lands in `/tmp/snap-private-tmp/snap.mkto/tmp/` on the host (root-only), not in the host's `/tmp` *(pending)*.
+- `/tmp` inside the snap is private to the snap: `--out /tmp/x` lands in `/tmp/snap-private-tmp/snap.mkto/tmp/` on the host (root-only), not in the host's `/tmp` (verified 2026-11-08: the file is mode 600, and listing that directory needs `sudo`). Because that surprises people, mkto prints a note after writing there: `note: /tmp is private to the mkto snap; the file is at /tmp/snap-private-tmp/snap.mkto/tmp/x (readable with sudo)`.
 - Timezones: the binary embeds the IANA database (`time/tzdata`), so `timezone = "Asia/Tbilisi"` works whatever zoneinfo the base ships.
 
 ## Install and run
@@ -202,50 +202,15 @@ mkto programs --name webinar
 
 ## CI
 
-The `snap` job in `.github/workflows/ci.yml` runs after `test`. `snapcore/action-build` (pinned to the v1.3.0 commit SHA, like every action in the workflow) installs LXD and snapcraft from `latest/stable` (9.x, which supports core26), runs `snapcraft` in the repo root and outputs the path of the `.snap`, which `actions/upload-artifact` saves as `mkto-snap`. The action has no base-specific logic. *(Not yet run on GitHub: the repo hasn't been pushed.)*
+The `snap` job in `.github/workflows/ci.yml` runs after `test`. `snapcore/action-build` (pinned to the v1.3.0 commit SHA, like every action in the workflow) installs LXD and snapcraft from `latest/stable` (9.x, which supports core26), runs `snapcraft` in the repo root and outputs the path of the `.snap`, which `actions/upload-artifact` saves as `mkto-snap`. The action has no base-specific logic. Check the first run in the repo's Actions tab.
 
-## Pending Erekle's confinement run
+## Verified confinement run (2026-11-08)
 
-Only an installed snap can confirm these; the steps are Part A and B5 of `docs/REAL_INSTANCE_CHECKLIST.md`:
+Run by Erekle on Ubuntu, snap revision x4 (and earlier x1), against a real Marketo instance. Steps: Part A and B5 of `docs/REAL_INSTANCE_CHECKLIST.md`.
 
-- [ ] `sudo snap install --dangerous` succeeds; `snap connections mkto` shows `network` and `home` connected.
-- [ ] `mkto version` reports `snap: mkto (x1)`.
-- [ ] `mkto init` writes `~/snap/mkto/common/config.toml` with mode 600 (and the mode snapd gave `common/`).
-- [ ] `Asia/Tbilisi` loads and DNS resolves under confinement.
-- [ ] `--out ~/x.json` works, `--out /tmp/x` lands in the snap's private tmp, `--out ~/.x` is denied.
-- [ ] `journalctl` / `snappy-debug`: no denials other than the expected hidden-file one, or each one documented here.
-
-When these pass, update the status note at the top and drop the *(pending)* marks.
-
-## Troubleshooting
-
-```bash
-snap connections mkto                                   # which plugs are connected
-journalctl -k | grep -i apparmor | grep mkto            # confinement denials
-sudo snap install snappy-debug && sudo snappy-debug     # explains denials as they happen
-snap run --shell mkto                                   # shell inside the confined environment
-```
-
-If something works from source but fails in the snap, it's almost always a path (`HOME` remapping, a hidden file in `$HOME`) or a missing plug.
-
-## Publishing (optional, not done)
-
-```bash
-snapcraft login
-snapcraft register mkto                  # pick another name if taken
-snapcraft upload --release=edge mkto_0.1.0_amd64.snap
-```
-
-For arm64, use `snapcraft remote-build` (builds on Launchpad).
-
-## Sources checked (2026-11-07)
-
-- Go plugin: https://ubuntu.com/docs/snapcraft/stable/common/craft-parts/reference/plugins/go_plugin/ (also the plugin source shipped in snapcraft 9.2.1, `craft_parts/plugins/go_plugin.py`)
-- snapcraft.yaml keys: https://ubuntu.com/docs/snapcraft/stable/reference/snapcraft-yaml/
-- Part environment variables (`SNAPCRAFT_PROJECT_VERSION`, `CRAFT_PART_SRC`, `CRAFT_PART_INSTALL`): https://ubuntu.com/docs/snapcraft/stable/reference/part-environment-variables/
-- Bases (core26 = Ubuntu 26.04 LTS, snapcraft 9.x): https://ubuntu.com/docs/snapcraft/stable/reference/bases/
-- `home` interface: the snapd docs page (https://snapcraft.io/docs/home-interface) now redirects to a login-walled host, so the rules above come from the AppArmor profile snapd 2.78 generates for the interface (`/var/lib/snapd/apparmor/profiles/` on the build machine).
-- Build channels: `snap info go` (`1.27/stable` = 1.27.3), `snap info core26` (`latest/stable`).
-- CI action: https://github.com/snapcore/action-build (README and `src/build.ts`; latest tag `v1.3.0`, `v1` floats).
-
-`documentation.ubuntu.com/snapcraft/stable/` now redirects to `ubuntu.com/docs/snapcraft/stable/`.
+- [x] `sudo snap install --dangerous` succeeds; `snap connections mkto` shows `network` and `home` connected.
+- [x] `mkto version` reports `snap: mkto (x…)` and the build commit.
+- [x] `mkto init` writes `~/snap/mkto/common/config.toml` with mode 600.
+- [x] DNS and HTTPS work under confinement: `quota`, `lead`, `activity`, `programs` and `brief --show-payload` all ran against the real instance.
+- [x] `--out ~/b5.json` works (mode 600, valid JSON); `--out /tmp/b5.txt` lands in `/tmp/snap-private-tmp/snap.mkto/tmp/`; `--out ~/.b5.txt` fails with `permission denied`.
+- [x] `journalctl -k | grep 'apparmor="DENIED"' | grep 'profile="snap.mkto'` prints nothing, not even for the hidden-file case (snapd's deny rule for it is quiet). Unrelated `snap-confine` `file_inherit` denials can appear when another tool captures a snap's output into a file under its own `/tmp` dir; they don't involve mkto's profile.
