@@ -8,18 +8,53 @@ client_id = ""
 client_secret = ""
 # The API doesn't report your subscription's limit, so it lives here.
 daily_quota = 50000
-lead_fields = ["id", "email", "firstName", "lastName", "title", "company",
-               "industry", "country", "leadSource", "createdAt", "updatedAt"]
-# Default activity types for `mkto activity`, resolved by NAME at runtime.
-activity_types = ["Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered",
-                  "Open Email", "Click Email", "Unsubscribe Email",
-                  "Change Status in Progression", "New Lead"]
+# Lead fields `mkto lead` shows. Commented out = these defaults; uncomment to choose your own.
+# lead_fields = ["id", "email", "firstName", "lastName", "title", "company",
+#                "industry", "country", "leadSource", "createdAt", "updatedAt"]
+# Extra fields `mkto lead` shows after lead_fields, skipping empty ones (also used by the
+# activity/why call card, leads and account): score, status, owner and CRM sync. Commented out = these defaults; [] = none. A name this instance
+# lacks is skipped (`--verbose` says which) but costs one extra API call per run.
+# The owner shown is leadOwnerEmailAddress if you add it here and it has a value, else
+# sfdcLeadOwnerId (a Salesforce user id).
+# profile_fields = ["leadScore", "leadStatus", "sfdcLeadOwnerId", "unsubscribed",
+#                   "emailInvalid", "sfdcLeadId", "sfdcContactId", "sfdcAccountId"]
+# Activity types `mkto activity`, `why`, `brief`, `account` and `leads --activity` fetch,
+# resolved by NAME at runtime.
+# Commented out = these defaults, which follow mkto updates; uncomment to choose your own.
+# Web visits and link clicks are left out (slow on large instances): --web adds them.
+# activity_types = ["Fill Out Form", "Open Email", "Click Email", "Email Bounced",
+#                   "Email Bounced Soft", "Unsubscribe Email", "Change Score",
+#                   "Change Data Value", "Change Status in Progression", "New Lead"]
+# Change Data Value rows `mkto activity` shows in its text timeline, by field label
+# (the LABEL column of `mkto fields`).
+# Commented out = these defaults; [] = every field. --all-changes and --json always show every field.
+# change_fields = ["Lead Status", "Lead Score", "Company Name"]
+# Program tokens `mkto activity` shows as a program's title and link (gated assets such
+# as whitepapers set {{my.Name}} and {{my.WPlink}}). Written with or without "my.", any
+# case. Commented out = these defaults; [] = none (saves one API call per program).
+# name_tokens = ["my.Name"]
+# link_tokens = ["my.WPlink"]
 
 [output]
 timezone = "Local"   # or an IANA name, e.g. "Asia/Tbilisi"
+# Link to the lead's record on the activity card: open any lead in Marketo, copy the
+# URL from the browser and put {id} where the lead id is.
+# lead_url = "https://<your Marketo UI host>/...{id}..."
 
 [llm]                # mkto brief: off by default. Read docs/LLM_LAYER.md (sign-off) before enabling.
 enabled = false
 provider = "anthropic"
 api_key = ""
 model = "claude-sonnet-5-5"
+
+# mkto why: the scoring rule behind MQL and DQ. Marketing owns these values; ask them.
+# score_field and status_field are field LABELS, as in the LABEL column of `mkto fields`
+# (Marketo's score and data-value changes name the field by label, e.g. "Behavior Score",
+# not behaviorScore__c). `mkto doctor` checks them. Uncomment and edit:
+# [why]
+# score_field = "Behavior Score"
+# mql_threshold = 100                         # a whole number above 0
+# status_field = "Lead Status"
+# mql_values = ["MQL"]
+# dq_values = ["Disqualified", "Recycled"]
+# near_hours = 2                              # "near": other activity this many hours either side (0 = default 2)

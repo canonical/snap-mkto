@@ -1,0 +1,188 @@
+{
+  "lead": {
+    "id": 1001,
+    "fields": {
+      "createdAt": "2025-01-10T09:00:00Z",
+      "email": "jane.doe@example.com",
+      "firstName": "Jane",
+      "id": 1001,
+      "lastName": "Doe",
+      "updatedAt": "2026-10-01T12:00:00Z"
+    }
+  },
+  "since": "2026-09-08T12:00:00Z",
+  "events": [
+    {
+      "id": 6001,
+      "date": "2026-10-01T08:00:00Z",
+      "type": "New Lead",
+      "primary": "2026-10-01",
+      "primaryId": 1001,
+      "attributes": {
+        "Source Type": "Web form fillout"
+      }
+    },
+    {
+      "id": 6002,
+      "date": "2026-10-05T09:00:00Z",
+      "type": "Change Data Value",
+      "primary": "Lead Status",
+      "primaryId": 2,
+      "campaignId": 3001,
+      "campaign": "Score Threshold",
+      "detail": "Nurture→MQL",
+      "attributes": {
+        "New Value": "MQL",
+        "Old Value": "Nurture",
+        "Reason": "Changed by smart campaign Score Threshold",
+        "Source": "Campaign"
+      }
+    },
+    {
+      "id": 6003,
+      "date": "2026-10-10T10:00:00Z",
+      "type": "Fill Out Form",
+      "primary": "Contact Us Form",
+      "primaryId": 12,
+      "attributes": {
+        "Client IP Address": "192.0.2.10",
+        "Form Fields": "{\"Email\":\"jane.doe@example.com\"}",
+        "Query Parameters": "utm_source=example\u0026utm_medium=email",
+        "User Agent": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0",
+        "Webpage ID": "15"
+      }
+    },
+    {
+      "id": 6004,
+      "date": "2026-10-10T10:00:05Z",
+      "type": "Change Score",
+      "primary": "Behavior Score",
+      "primaryId": 5,
+      "campaignId": 3002,
+      "campaign": "Behavior Scoring",
+      "detail": "+25 (60→85) Filled out form",
+      "attributes": {
+        "Change Value": "+25",
+        "New Value": "85",
+        "Old Value": "60",
+        "Reason": "Filled out form"
+      }
+    },
+    {
+      "id": 6005,
+      "date": "2026-10-11T08:30:00Z",
+      "type": "Open Email",
+      "primary": "Example Welcome Email",
+      "primaryId": 801,
+      "attributes": {
+        "Device": "Computer",
+        "User Agent": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0"
+      }
+    },
+    {
+      "id": 6006,
+      "date": "2026-10-11T08:31:00Z",
+      "type": "Click Email",
+      "primary": "Example Welcome Email",
+      "primaryId": 801,
+      "detail": "https://www.example.com/whitepaper",
+      "attributes": {
+        "Device": "Computer",
+        "Link": "https://www.example.com/whitepaper"
+      }
+    },
+    {
+      "id": 6007,
+      "date": "2026-10-12T12:00:00Z",
+      "type": "Change Status in Progression",
+      "primary": "Example Webinar 2026",
+      "primaryId": 4001,
+      "campaignId": 3003,
+      "campaign": "Webinar Attendance",
+      "detail": "→ Attended ✓ success",
+      "attributes": {
+        "New Status": "Attended",
+        "Old Status": "Registered",
+        "Program Member ID": "90001",
+        "Reason": "Updated by smart campaign",
+        "Success": "true"
+      }
+    },
+    {
+      "id": 6008,
+      "date": "2026-10-15T09:00:00Z",
+      "type": "Email Bounced",
+      "primary": "Example Newsletter",
+      "primaryId": 802,
+      "detail": "hardbounce: 550 5.1.1 mailbox unknown",
+      "attributes": {
+        "Category": "hardbounce",
+        "Details": "550 5.1.1 mailbox unknown",
+        "Email": "jane.doe@example.com"
+      }
+    },
+    {
+      "id": 6009,
+      "date": "2026-10-16T09:00:00Z",
+      "type": "Email Bounced Soft",
+      "primary": "Example Newsletter",
+      "primaryId": 802,
+      "detail": "softbounce: 452 4.2.2 mailbox full",
+      "attributes": {
+        "Category": "softbounce",
+        "Details": "452 4.2.2 mailbox full",
+        "Email": "jane.doe@example.com"
+      }
+    },
+    {
+      "id": 6010,
+      "date": "2026-10-17T09:00:00Z",
+      "type": "Unsubscribe Email",
+      "primary": "Example Newsletter",
+      "primaryId": 802,
+      "attributes": {}
+    },
+    {
+      "id": 6011,
+      "date": "2026-10-18T09:00:00Z",
+      "type": "Change Score",
+      "primary": "Behavior Score",
+      "primaryId": 5,
+      "campaignId": 3002,
+      "campaign": "Behavior Scoring",
+      "detail": "-10 (85→75) Email bounced",
+      "attributes": {
+        "Change Value": "-10",
+        "New Value": "75",
+        "Old Value": "85",
+        "Reason": "Email bounced"
+      }
+    },
+    {
+      "id": 6012,
+      "date": "2026-10-20T09:00:00Z",
+      "type": "Change Data Value",
+      "primary": "Lead Status",
+      "primaryId": 2,
+      "campaignId": 3004,
+      "campaign": "Disqualify Bounced",
+      "detail": "MQL→Disqualified",
+      "attributes": {
+        "New Value": "Disqualified",
+        "Old Value": "MQL",
+        "Reason": "Changed by smart campaign Disqualify Bounced",
+        "Source": "Campaign"
+      }
+    }
+  ],
+  "programs": [
+    {
+      "id": 1001,
+      "name": "Example Webinar 2026",
+      "status": "Member",
+      "date": "2026-10-20T09:15:00Z",
+      "acquiredBy": true
+    }
+  ],
+  "notes": []
+}

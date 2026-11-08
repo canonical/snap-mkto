@@ -1,0 +1,5 @@
+EMAIL,ID,SCORE,STATUS,OWNER,UPDATED
+john.roe@example.com,1003,-5,'=1+1,,2026-09-01 04:00
+jane.doe@example.com (dup),1001,85,MQL,owner@example.com,2026-10-01 16:00
+jane.doe@example.com (dup),1002,10,,,2026-06-15 12:30
+nobody@example.com,not found,,,,

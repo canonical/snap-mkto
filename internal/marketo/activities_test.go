@@ -6,11 +6,13 @@ package marketo
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,7 +40,7 @@ func row(id int, date string) string {
 }
 
 func TestResolveTypesUnknown(t *testing.T) {
-	all := []ActivityType{{1, "Visit Webpage"}, {2, "Fill Out Form"}, {6, "Send Email"}}
+	all := []ActivityType{{ID: 1, Name: "Visit Webpage"}, {ID: 2, Name: "Fill Out Form"}, {ID: 6, Name: "Send Email"}}
 	ids, unknown := ResolveTypes(all, []string{" fill out form ", "Nope", "Visit Webpage", "FILL OUT FORM", "Zzz"})
 	if !reflect.DeepEqual(ids, []int{2, 1}) {
 		t.Errorf("ids = %v, want [2 1]", ids)
@@ -61,44 +63,132 @@ func TestActivityTypes(t *testing.T) {
 	}
 }
 
-// recorder captures the activityTypeIds sent on each activities.json call.
-type recorder struct{ batches []string }
-
-func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Path == actsPath {
-		r.batches = append(r.batches, req.URL.Query().Get("activityTypeIds"))
-	}
-	return http.DefaultTransport.RoundTrip(req)
-}
-
 func TestActivitiesBatching(t *testing.T) {
 	s := marketotest.New(t)
 	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
 	s.Handle(actsPath, page("", false, "x"))
-	rec := &recorder{}
 	ids := make([]int, 23)
 	for i := range ids {
 		ids[i] = 100 + i
 	}
-	h := newHarness(s, Options{HTTP: &http.Client{Transport: rec}})
-	if _, err := h.c.Activities(context.Background(), 42, ids, since); err != nil {
+	if _, err := newHarness(s, Options{}).c.Activities(context.Background(), 42, ids, since); err != nil {
 		t.Fatal(err)
 	}
-	if got := s.Hits(tokenPath); got != 3 {
-		t.Errorf("paging token hits = %d, want 3", got)
+	if got := s.Hits(tokenPath); got != 6 {
+		t.Errorf("paging token hits = %d, want 6", got)
 	}
 	var sizes []int
-	for _, b := range rec.batches {
-		sizes = append(sizes, len(strings.Split(b, ",")))
+	seen := map[string]bool{}
+	for _, q := range s.Queries(actsPath) {
+		b := strings.Split(q.Get("activityTypeIds"), ",")
+		sizes = append(sizes, len(b))
+		for _, id := range b {
+			seen[id] = true
+		}
+		if q.Get("leadIds") != "42" || q.Get("nextPageToken") == "" {
+			t.Errorf("query = %v", q)
+		}
 	}
-	if !reflect.DeepEqual(sizes, []int{10, 10, 3}) {
-		t.Errorf("batch sizes = %v, want [10 10 3]", sizes)
-	}
-	if q := s.Query(actsPath); q.Get("leadIds") != "42" || q.Get("nextPageToken") == "" {
-		t.Errorf("query = %v", q)
+	slices.Sort(sizes) // batches run concurrently, so arrival order varies
+	if !reflect.DeepEqual(sizes, []int{3, 4, 4, 4, 4, 4}) || len(seen) != 23 {
+		t.Errorf("batch sizes = %v over %d distinct ids, want [3 4 4 4 4 4] over 23", sizes, len(seen))
 	}
 	if q := s.Query(tokenPath); q.Get("sinceDatetime") != "2026-10-01T00:00:00Z" {
 		t.Errorf("sinceDatetime = %q", q.Get("sinceDatetime"))
+	}
+}
+
+// TestActivitiesParallelRefresh runs 3 batches that all hit 601 with the first token at
+// once: one new token serves them all.
+func TestActivitiesParallelRefresh(t *testing.T) {
+	var identity, arrived atomic.Int32
+	all := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case marketotest.IdentityPath:
+			fmt.Fprintf(w, `{"access_token":"t%d","expires_in":3600}`, identity.Add(1))
+		case tokenPath:
+			fmt.Fprint(w, `{"success":true,"nextPageToken":"p0"}`)
+		default:
+			if r.Header.Get("Authorization") == "Bearer t1" {
+				if arrived.Add(1) == 3 {
+					close(all)
+				}
+				select { // all three walks hold t1 before any learns it expired
+				case <-all:
+				case <-time.After(2 * time.Second):
+					t.Error("the 3 batches did not run concurrently")
+				}
+				fmt.Fprint(w, `{"success":false,"errors":[{"code":"601","message":"Access token invalid"}]}`)
+				return
+			}
+			fmt.Fprint(w, `{"success":true,"result":[],"moreResult":false}`)
+		}
+	}))
+	defer ts.Close()
+	_, err := newHarnessURL(ts.URL, Options{}).c.Activities(context.Background(), 1, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := identity.Load(); got != 2 {
+		t.Errorf("identity calls = %d, want 2 (one extra after 601)", got)
+	}
+}
+
+func TestActivitiesAtMostThreeWalks(t *testing.T) {
+	var now, peak atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case marketotest.IdentityPath:
+			fmt.Fprint(w, `{"access_token":"t","expires_in":3600}`)
+		case tokenPath:
+			fmt.Fprint(w, `{"success":true,"nextPageToken":"p0"}`)
+		default:
+			n := now.Add(1)
+			for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+			}
+			time.Sleep(20 * time.Millisecond)
+			now.Add(-1)
+			fmt.Fprint(w, `{"success":true,"result":[],"moreResult":false}`)
+		}
+	}))
+	defer ts.Close()
+	ids := make([]int, 24) // 6 batches
+	if _, err := newHarnessURL(ts.URL, Options{}).c.Activities(context.Background(), 1, ids, since); err != nil {
+		t.Fatal(err)
+	}
+	if got := peak.Load(); got > 3 || got < 2 {
+		t.Errorf("peak concurrent activities calls = %d, want at most 3 (and some overlap)", got)
+	}
+}
+
+// TestActivitiesQuotaWins: one batch hits 607 while the others are mid-page; the quota
+// error is returned, not the cancellations it caused, and the others stop.
+func TestActivitiesQuotaWins(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == marketotest.IdentityPath:
+			fmt.Fprint(w, `{"access_token":"t","expires_in":3600}`)
+		case r.URL.Path == tokenPath:
+			fmt.Fprint(w, `{"success":true,"nextPageToken":"p0"}`)
+		case r.URL.Query().Get("activityTypeIds") == "9":
+			time.Sleep(20 * time.Millisecond)
+			fmt.Fprint(w, `{"success":false,"errors":[{"code":"607","message":"Daily quota reached"}]}`)
+		default:
+			select { // hang until the client gives up
+			case <-r.Context().Done():
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}))
+	defer ts.Close()
+	start := time.Now()
+	_, err := newHarnessURL(ts.URL, Options{}).c.Activities(context.Background(), 1, []int{1, 2, 3, 4, 5, 6, 7, 8, 9}, since)
+	if !errors.Is(err, ErrQuotaExhausted) {
+		t.Fatalf("err = %v, want ErrQuotaExhausted", err)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Error("other batches were not cancelled")
 	}
 }
 
@@ -126,7 +216,7 @@ func TestActivitiesMergedSorted(t *testing.T) {
 	s.Handle(actsPath,
 		page(row(9, "2026-11-03T00:00:00Z")+","+row(5, "2026-11-02T00:00:00Z"), false, "a"),
 		page(row(7, "2026-11-02T00:00:00Z")+","+row(1, "2026-11-01T00:00:00Z"), false, "b"))
-	ids := make([]int, 12) // two batches
+	ids := make([]int, 12) // three batches: two get the second page, whose rows must show once
 	acts, err := newHarness(s, Options{}).c.Activities(context.Background(), 1, ids, since)
 	if err != nil {
 		t.Fatal(err)
@@ -234,7 +324,7 @@ func TestActivitiesSlowPageProgress(t *testing.T) {
 	if _, err := newHarness(s, Options{Progress: &prog}).c.Activities(context.Background(), 1, []int{1}, since); err != nil {
 		t.Fatal(err)
 	}
-	re := regexp.MustCompile(`^scanning activity: page 2 took [0-9]+\.[0-9]s \(web visits and link clicks are slow on large Marketo instances\)\n$`)
+	re := regexp.MustCompile(`^scanning activity: page 2 took [0-9]+\.[0-9]s \(Marketo scans every activity of these types instance-wide; web visits and field changes are the slow ones\)\n$`)
 	if !re.MatchString(prog.String()) {
 		t.Errorf("progress = %q, want one line for page 2", prog.String())
 	}
@@ -250,5 +340,22 @@ func TestActivitiesFastPageNoProgress(t *testing.T) {
 	}
 	if prog.Len() != 0 {
 		t.Errorf("progress = %q, want none", prog.String())
+	}
+}
+
+func TestActivitiesDecodeCampaignID(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
+	s.Handle(actsPath, page(`{"id":1,"activityDate":"2026-10-01T00:00:00Z","activityTypeId":13,"campaignId":3001,"primaryAttributeValueId":2,"primaryAttributeValue":"Lead Status"},
+{"id":2,"activityDate":"2026-10-02T00:00:00Z","activityTypeId":2,"primaryAttributeValue":"Form"}`, false, ""))
+	acts, err := newHarness(s, Options{}).c.Activities(context.Background(), 1001, []int{2, 13}, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acts[0].CampaignID != 3001 || acts[0].PrimaryID != 2 {
+		t.Errorf("acts[0] = %+v, want CampaignID 3001, PrimaryID 2", acts[0])
+	}
+	if acts[1].CampaignID != 0 || acts[1].PrimaryID != 0 {
+		t.Errorf("acts[1] = %+v, want zero ids when absent", acts[1])
 	}
 }

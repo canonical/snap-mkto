@@ -1,0 +1,27 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"id": 2, "name": "Fill Out Form", "description": "Fill out form on web page", "primaryAttribute": {"name": "Webform ID", "dataType": "integer"}, "attributes": [
+      {"name": "Client IP Address", "dataType": "string"}, {"name": "Form Fields", "dataType": "string"}, {"name": "Query Parameters", "dataType": "string"},
+      {"name": "Referrer URL", "dataType": "string"}, {"name": "User Agent", "dataType": "string"}, {"name": "Webpage ID", "dataType": "string"}]},
+    {"id": 8, "name": "Email Bounced", "description": "Email bounced", "primaryAttribute": {"name": "Mailing ID", "dataType": "integer"}, "attributes": [
+      {"name": "Category", "dataType": "string"}, {"name": "Details", "dataType": "string"}, {"name": "Email", "dataType": "string"}]},
+    {"id": 9, "name": "Unsubscribe Email", "description": "Unsubscribe from email", "primaryAttribute": {"name": "Mailing ID", "dataType": "integer"}, "attributes": []},
+    {"id": 10, "name": "Open Email", "description": "Open email", "primaryAttribute": {"name": "Mailing ID", "dataType": "integer"}, "attributes": [
+      {"name": "Device", "dataType": "string"}, {"name": "User Agent", "dataType": "string"}]},
+    {"id": 11, "name": "Click Email", "description": "Click link in email", "primaryAttribute": {"name": "Mailing ID", "dataType": "integer"}, "attributes": [
+      {"name": "Device", "dataType": "string"}, {"name": "Link", "dataType": "string"}]},
+    {"id": 12, "name": "New Lead", "description": "New lead created", "primaryAttribute": {"name": "Created Date", "dataType": "date"}, "attributes": [
+      {"name": "Source Type", "dataType": "string"}]},
+    {"id": 13, "name": "Change Data Value", "description": "Change data value", "primaryAttribute": {"name": "Attribute Name", "dataType": "string"}, "attributes": [
+      {"name": "New Value", "dataType": "string"}, {"name": "Old Value", "dataType": "string"}, {"name": "Reason", "dataType": "string"}, {"name": "Source", "dataType": "string"}]},
+    {"id": 22, "name": "Change Status in Progression", "description": "Change status in program progression", "primaryAttribute": {"name": "Program ID", "dataType": "integer"}, "attributes": [
+      {"name": "New Status", "dataType": "string"}, {"name": "Old Status", "dataType": "string"}, {"name": "Program Member ID", "dataType": "integer"},
+      {"name": "Reason", "dataType": "string"}, {"name": "Success", "dataType": "boolean"}]},
+    {"id": 27, "name": "Email Bounced Soft", "description": "Email bounced softly", "primaryAttribute": {"name": "Mailing ID", "dataType": "integer"}, "attributes": [
+      {"name": "Category", "dataType": "string"}, {"name": "Details", "dataType": "string"}, {"name": "Email", "dataType": "string"}]},
+    {"id": 100, "name": "Change Score", "description": "Change score value", "primaryAttribute": {"name": "Score Name", "dataType": "string"}, "attributes": [
+      {"name": "Change Value", "dataType": "string"}, {"name": "New Value", "dataType": "integer"}, {"name": "Old Value", "dataType": "integer"}, {"name": "Reason", "dataType": "string"}]}
+  ]
+}

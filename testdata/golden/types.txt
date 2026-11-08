@@ -1,0 +1,11 @@
+ID   NAME                          PRIMARY         ATTRIBUTES
+2    Fill Out Form                 Webform ID      Client IP Address, Form Fields, Query Parameters, Referrer URL, User Agent, Webpage ID
+8    Email Bounced                 Mailing ID      Category, Details, Email
+9    Unsubscribe Email             Mailing ID      -
+10   Open Email                    Mailing ID      Device, User Agent
+11   Click Email                   Mailing ID      Device, Link
+12   New Lead                      Created Date    Source Type
+13   Change Data Value             Attribute Name  New Value, Old Value, Reason, Source
+22   Change Status in Progression  Program ID      New Status, Old Status, Program Member ID, Reason, Success
+27   Email Bounced Soft            Mailing ID      Category, Details, Email
+100  Change Score                  Score Name      Change Value, New Value, Old Value, Reason

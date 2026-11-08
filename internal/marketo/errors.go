@@ -11,6 +11,9 @@ import (
 // ErrQuotaExhausted is Marketo error 607: the daily API quota is used up.
 var ErrQuotaExhausted = errors.New("Marketo daily API quota reached (607); it resets at 12:00 AM US Central. Run `mkto quota` to see usage")
 
+// ErrAuth wraps a refused token request: client_id or client_secret is wrong.
+var ErrAuth = errors.New("Marketo authentication failed")
+
 // APIError is a Marketo error code mkto has no special handling for.
 type APIError struct{ Code, Message string }
 

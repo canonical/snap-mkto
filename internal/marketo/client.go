@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -41,13 +42,16 @@ type Options struct {
 	Sleep    func(context.Context, time.Duration) error
 }
 
-// Client talks to one Marketo instance. It is not safe for concurrent use.
+// Client talks to one Marketo instance. It is safe for concurrent use.
 type Client struct {
 	base, id, secret string
 	o                Options
 
+	mu     sync.Mutex // guards token and expiry; held while fetching, so parallel calls fetch one token
 	token  string
 	expiry time.Time // refresh at or after this
+
+	outMu sync.Mutex // keeps Log and Progress lines whole
 }
 
 // New returns a client for baseURL (already normalised, e.g. https://x.mktorest.com).
@@ -125,7 +129,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 				return &APIError{code, msg}
 			}
 			refreshed = true
-			c.token = ""
+			c.dropToken(tok)
 			continue
 		case code == "606":
 			reason = "606 rate limit"
@@ -153,9 +157,28 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 	}
 }
 
+// HasToken reports whether the client holds an access token: after a failed call it tells
+// a credentials failure from an endpoint one.
+func (c *Client) HasToken() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.token != ""
+}
+
+// dropToken forgets tok after a 601/602, unless a parallel call has already replaced it.
+func (c *Client) dropToken(tok string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.token == tok {
+		c.token = ""
+	}
+}
+
 // accessToken returns the cached token, fetching a new one when it is within
 // 60 s of expiry.
 func (c *Client) accessToken(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.token != "" && c.o.Now().Before(c.expiry) {
 		return c.token, nil
 	}
@@ -174,10 +197,10 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 		Description string `json:"error_description"`
 	}
 	if err := json.Unmarshal(body, &t); err != nil {
-		return "", fmt.Errorf("%w: check base_url in your config file", nonJSON(status))
+		return "", fmt.Errorf("%w: check marketo.base_url", nonJSON(status))
 	}
 	if status != http.StatusOK || t.AccessToken == "" {
-		return "", fmt.Errorf("Marketo authentication failed (HTTP %d: %s): check client_id and client_secret in your config file", status, t.Description)
+		return "", fmt.Errorf("%w (HTTP %d: %s)", ErrAuth, status, t.Description)
 	}
 	c.token = t.AccessToken
 	c.expiry = now.Add(time.Duration(t.ExpiresIn-60) * time.Second)
@@ -199,7 +222,7 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 	defer cancel()
 	req, err := http.NewRequestWithContext(rctx, http.MethodGet, u, nil)
 	if err != nil {
-		return 0, nil, fmt.Errorf("cannot build request for GET %s: check base_url in your config file", path)
+		return 0, nil, fmt.Errorf("cannot build request for GET %s: check marketo.base_url", path)
 	}
 	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
@@ -211,6 +234,10 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 			return 0, nil, ctx.Err()
 		}
 		if ne, ok := errors.AsType[net.Error](err); ok && ne.Timeout() || rctx.Err() != nil {
+			// Only a dial or DNS timeout says Marketo is unreachable; a slow answer does not.
+			if reachFailed(err) {
+				return 0, nil, fmt.Errorf("%w: %s", timedOut(path), netHint)
+			}
 			return 0, nil, timedOut(path)
 		}
 		var ue *url.Error
@@ -222,7 +249,13 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 		_, isNet := errors.AsType[net.Error](err)
 		_, isCert := errors.AsType[*tls.CertificateVerificationError](err)
 		if !isNet && !isCert {
-			return 0, nil, fmt.Errorf("GET %s failed: unusable response from Marketo: check base_url in your config file", path)
+			return 0, nil, fmt.Errorf("GET %s failed: unusable response from Marketo: check marketo.base_url", path)
+		}
+		if isCert {
+			return 0, nil, fmt.Errorf("GET %s failed: %v", path, err)
+		}
+		if reachFailed(err) {
+			return 0, nil, fmt.Errorf("GET %s failed: %v: %s", path, err, netHint)
 		}
 		return 0, nil, fmt.Errorf("GET %s failed: %v", path, err)
 	}
@@ -243,8 +276,22 @@ func (c *Client) send(ctx context.Context, path string, q url.Values, tok string
 
 func (c *Client) logf(format string, a ...any) {
 	if c.o.Log != nil {
+		c.outMu.Lock()
+		defer c.outMu.Unlock()
 		fmt.Fprintf(c.o.Log, format+"\n", a...)
 	}
+}
+
+// netHint follows dial and DNS errors (including their timeouts): the host couldn't be
+// reached, so base_url or the network is the likely cause. cmd/mkto adds where base_url came from.
+const netHint = "check marketo.base_url and your network"
+
+// reachFailed reports a dial or DNS failure, as opposed to an error on a connection
+// that was made (a reset, a slow answer), where base_url is not the likely cause.
+func reachFailed(err error) bool {
+	_, dns := errors.AsType[*net.DNSError](err)
+	oe, ok := errors.AsType[*net.OpError](err)
+	return dns || ok && oe.Op == "dial"
 }
 
 func timedOut(path string) error {

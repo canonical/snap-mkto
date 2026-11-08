@@ -1,0 +1,45 @@
+{
+  "leads": [
+    {
+      "id": 1003,
+      "fields": {
+        "createdAt": null,
+        "email": "john.roe@example.com",
+        "firstName": null,
+        "id": 1003,
+        "lastName": null,
+        "leadScore": -5,
+        "leadStatus": "=1+1",
+        "updatedAt": "2026-09-01T00:00:00Z"
+      }
+    },
+    {
+      "id": 1001,
+      "fields": {
+        "createdAt": null,
+        "email": "jane.doe@example.com",
+        "firstName": null,
+        "id": 1001,
+        "lastName": null,
+        "leadScore": 85,
+        "leadStatus": "MQL",
+        "updatedAt": "2026-10-01T12:00:00Z"
+      }
+    },
+    {
+      "id": 1002,
+      "fields": {
+        "createdAt": null,
+        "email": "Jane.Doe@example.com",
+        "firstName": null,
+        "id": 1002,
+        "lastName": null,
+        "leadScore": 10,
+        "updatedAt": "2026-06-15T08:30:00Z"
+      }
+    }
+  ],
+  "notFound": [
+    "nobody@example.com"
+  ]
+}

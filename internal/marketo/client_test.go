@@ -15,7 +15,9 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -32,6 +34,7 @@ var ok = marketotest.Response{Body: "leads_one.json"}
 
 // harness builds a client against s with a recorded, instant Sleep.
 type harness struct {
+	mu     sync.Mutex
 	c      *Client
 	sleeps []time.Duration
 	log    bytes.Buffer
@@ -43,6 +46,8 @@ func newHarnessURL(base string, o Options) *harness {
 	h := &harness{}
 	if o.Sleep == nil {
 		o.Sleep = func(_ context.Context, d time.Duration) error {
+			h.mu.Lock() // parallel activity batches can back off at once
+			defer h.mu.Unlock()
 			h.sleeps = append(h.sleeps, d)
 			return nil
 		}
@@ -442,6 +447,36 @@ func TestTransportErrorNoSecret(t *testing.T) {
 	}
 }
 
+type failRT struct{ err error }
+
+func (f failRT) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
+func TestDialErrorHint(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	const hint = ": check marketo.base_url and your network"
+	for name, h := range map[string]*harness{
+		"refused": newHarnessURL("http://"+addr, Options{}),
+		"dns": newHarnessURL("https://x.example.com", Options{HTTP: &http.Client{Transport: failRT{
+			&net.DNSError{Err: "no such host", Name: "x.example.com", IsNotFound: true}}}}),
+		"timeout": newHarnessURL("https://x.example.com", Options{HTTP: &http.Client{Transport: failRT{
+			&net.DNSError{Err: "i/o timeout", Name: "x.example.com", IsTimeout: true}}}}),
+	} {
+		err := h.getLeads(t)
+		if err == nil || !strings.HasSuffix(err.Error(), hint) || !strings.HasPrefix(err.Error(), "GET /identity/oauth/token ") {
+			t.Errorf("%s: err = %v, want the %q hint", name, err, hint)
+		}
+		noSecret(t, err)
+		if err != nil && (strings.Contains(err.Error(), "?") || strings.Contains(err.Error(), "client_id")) {
+			t.Errorf("%s: error leaks the request query: %q", name, err)
+		}
+	}
+}
+
 func TestIdentity502Retried(t *testing.T) {
 	s := marketotest.New(t)
 	s.Handle(marketotest.IdentityPath, marketotest.Response{Status: http.StatusBadGateway, Body: "<html>Bad Gateway</html>"}, marketotest.Response{Body: "identity_token_ok.json"})
@@ -463,7 +498,24 @@ func TestIdentityNonJSON(t *testing.T) {
 	s.Handle(marketotest.IdentityPath, marketotest.Response{Status: http.StatusNotFound, Body: "<html>Not Found</html>"})
 	h := newHarness(s, Options{})
 	err := h.getLeads(t)
-	if want := "unexpected non-JSON response from Marketo (HTTP 404): check base_url in your config file"; err == nil || err.Error() != want {
+	if want := "unexpected non-JSON response from Marketo (HTTP 404): check marketo.base_url"; err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+func TestReachFailed(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"dns", &net.DNSError{Err: "no such host", Name: "x.invalid", IsNotFound: true}, true},
+		{"dial refused", &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}, true},
+		{"read reset", &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, false},
+		{"other", errors.New("boom"), false},
+	} {
+		if got := reachFailed(c.err); got != c.want {
+			t.Errorf("%s: reachFailed = %v, want %v", c.name, got, c.want)
+		}
 	}
 }

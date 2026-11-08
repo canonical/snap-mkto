@@ -1,0 +1,20 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"id": 2, "displayName": "Company Name", "dataType": "string", "length": 255, "rest": {"name": "company", "readOnly": false}, "soap": {"name": "Company", "readOnly": false}},
+    {"id": 4, "displayName": "Email Address", "dataType": "email", "length": 255, "rest": {"name": "email", "readOnly": false}, "soap": {"name": "Email", "readOnly": false}},
+    {"id": 6, "displayName": "First Name", "dataType": "string", "length": 255, "rest": {"name": "firstName", "readOnly": false}, "soap": {"name": "FirstName", "readOnly": false}},
+    {"id": 7, "displayName": "Last Name", "dataType": "string", "length": 255, "rest": {"name": "lastName", "readOnly": false}, "soap": {"name": "LastName", "readOnly": false}},
+    {"id": 20, "displayName": "Lead Score", "dataType": "integer", "rest": {"name": "leadScore", "readOnly": false}, "soap": {"name": "LeadScore", "readOnly": false}},
+    {"id": 21, "displayName": "Lead Status", "dataType": "string", "length": 255, "rest": {"name": "leadStatus", "readOnly": false}, "soap": {"name": "LeadStatus", "readOnly": false}},
+    {"id": 22, "displayName": "Unsubscribed", "dataType": "boolean", "rest": {"name": "unsubscribed", "readOnly": false}, "soap": {"name": "Unsubscribed", "readOnly": false}},
+    {"id": 23, "displayName": "Email Invalid", "dataType": "boolean", "rest": {"name": "emailInvalid", "readOnly": true}, "soap": {"name": "EmailInvalid", "readOnly": true}},
+    {"id": 30, "displayName": "SFDC Lead ID", "dataType": "string", "length": 18, "rest": {"name": "sfdcLeadId", "readOnly": true}, "soap": {"name": "SFDCLeadId", "readOnly": true}},
+    {"id": 31, "displayName": "SFDC Contact ID", "dataType": "string", "length": 18, "rest": {"name": "sfdcContactId", "readOnly": true}, "soap": {"name": "SFDCContactId", "readOnly": true}},
+    {"id": 32, "displayName": "SFDC Account ID", "dataType": "string", "length": 18, "rest": {"name": "sfdcAccountId", "readOnly": true}, "soap": {"name": "SFDCAccountId", "readOnly": true}},
+    {"id": 33, "displayName": "Lead Owner Email Address", "dataType": "email", "length": 255, "rest": {"name": "leadOwnerEmailAddress", "readOnly": true}, "soap": {"name": "LeadOwnerEmailAddress", "readOnly": true}},
+    {"id": 34, "displayName": "SFDC Lead Owner Id", "dataType": "string", "length": 50, "rest": {"name": "sfdcLeadOwnerId", "readOnly": true}, "soap": {"name": "SFDCLeadOwnerId", "readOnly": true}},
+    {"id": 900, "displayName": "Behavior Score", "dataType": "integer", "rest": {"name": "behaviorScore__c", "readOnly": false}, "soap": {"name": "behaviorScore__c", "readOnly": false}}
+  ]
+}

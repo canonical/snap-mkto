@@ -74,22 +74,22 @@ jobs:
           path: ${{ steps.build.outputs.snap }}
 ```
 
-Actions are pinned to full commit SHAs, with the release tag as a trailing comment (resolved on 2026-11-07 with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing annotated tags with `gh api repos/<owner>/<repo>/git/tags/<sha>`). Dependabot's `github-actions` updates bump the SHA and the comment together. `persist-credentials: false` keeps the job token out of `.git/config`, since no step needs to push.
+Actions are pinned to full commit SHAs, with the release tag as a trailing comment (resolved on 2026-11-07 with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, dereferencing annotated tags with `gh api repos/<owner>/<repo>/git/tags/<sha>`). Renovate's updates bump the SHA and the comment together. `persist-credentials: false` keeps the job token out of `.git/config`, since no step needs to push.
 
-## Dependabot — `.github/dependabot.yml`
+## Renovate — `renovate.json`
 
-```yaml
-version: 2
-updates:
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: weekly
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: monthly
+Renovate opens the dependency update PRs for Go modules and GitHub Actions, and keeps a Dependency Dashboard issue listing what it tracks. Dependabot version updates are not used (decided 2026-11-09), so the same update never arrives twice. Dependabot *security alerts* stay on in the repo settings (see Security above).
+
+```json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ]
+}
 ```
+
+To drop the dashboard issue, add `"dependencyDashboard": false`.
 
 ## snapcraft.yaml metadata
 

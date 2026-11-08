@@ -5,9 +5,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,15 +20,17 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/canonical/snap-mkto/internal/config"
 	"github.com/canonical/snap-mkto/internal/marketo"
 	"github.com/canonical/snap-mkto/internal/output"
+	"github.com/canonical/snap-mkto/internal/story"
 )
 
-const maxProgramLookups = 25
+const maxProgramLookups, maxCampaignLookups = 25, 25
 
 func newActivityCmd(env Env) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "activity <email>",
+		Use:   "activity <email|value>",
 		Short: "Show a lead's activity timeline and programs",
 		Long: "Show a lead's activity timeline and program memberships.\n\n" +
 			"Marketo purges some high-volume activity types after a limited period, so an empty result for an older window isn't necessarily an error.",
@@ -36,17 +40,25 @@ func newActivityCmd(env Env) *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.Int("days", 30, "window size in days (at least 1)")
+	f.Int("days", 14, "window size in days (at least 1)")
 	f.String("types", "", "comma-separated activity type names (overrides activity_types)")
 	f.Bool("all-types", false, "fetch every activity type (uses more API quota)")
+	f.Bool("web", false, "include Visit Webpage and Click Link (slow on large Marketo instances)")
+	f.Bool("all-changes", false, "show every Change Data Value field, ignoring change_fields")
 	f.Bool("all-programs", false, "show every program membership, not only those in the window")
-	f.Int("lead-id", 0, "pick this lead when several share the email")
+	f.Int("lead-id", 0, "pick this lead when several match")
+	f.String("by", "email", byHelp)
 	f.String("out", "", "write the output to FILE (mode 0600) instead of stdout")
+	f.Bool("force", false, "overwrite an existing --out file")
 	return cmd
 }
 
-func runActivity(cmd *cobra.Command, env Env, email string) error {
+func runActivity(cmd *cobra.Command, env Env, value string) (err error) {
 	f := cmd.Flags()
+	by, _ := f.GetString("by")
+	if err := checkKey(by, value); err != nil {
+		return err
+	}
 	days, _ := f.GetInt("days")
 	typesFlag, _ := f.GetString("types")
 	allTypes, _ := f.GetBool("all-types")
@@ -69,6 +81,19 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	if allTypes {
 		warn("--all-types fetches every activity type and uses more API quota")
 	}
+	var out *os.File
+	if outPath != "" {
+		force, _ := f.GetBool("force")
+		if out, err = openOut(env, outPath, force); err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil { // leave no empty or partial file of mkto's own behind
+				out.Close()
+				os.Remove(out.Name())
+			}
+		}()
+	}
 
 	cfg, cfgPath, client, err := newClient(cmd, env)
 	if err != nil {
@@ -80,13 +105,19 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 	}
 	ctx := cmd.Context()
 
-	leads, err := leadsByEmail(ctx, cmd, env, client, cfg, email, []string{"id", "updatedAt", "title", "company"})
+	leads, err := leadsBy(ctx, cmd, env, client, cfg, by, value, cardExtras(cfg))
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
-	lead, notes, err := pickLead(leads, leadID, email)
+	lead, notes, err := pickLead(leads, leadID, by, value)
 	if err != nil {
 		return err
+	}
+	if !asJSON { // ahead of stdout, so it can't scroll away under a long timeline
+		for _, n := range notes {
+			fmt.Fprintf(env.Stderr, "note: %s\n", output.Clean(n))
+		}
+		notes = nil
 	}
 
 	all, err := client.ActivityTypes(ctx)
@@ -99,14 +130,32 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 			typeIDs = append(typeIDs, t.ID)
 		}
 	} else {
-		names := cfg.Marketo.ActivityTypes
-		if f.Changed("types") {
-			names = strings.Split(typesFlag, ",")
+		names := strings.Split(typesFlag, ",")
+		if !f.Changed("types") { // an explicit --types wins over the web filter
+			web, _ := f.GetBool("web")
+			var note string
+			if names, note, err = dropWebTypes(cfg.Marketo.ActivityTypes, web); err != nil {
+				return err
+			}
+			if note != "" {
+				fmt.Fprintln(env.Stderr, note)
+			}
 		}
 		var unknown []string
 		typeIDs, unknown = marketo.ResolveTypes(all, names)
-		for _, n := range unknown {
-			warn("unknown activity type %q skipped; check activity_types in %s or --types", strings.TrimSpace(n), cfgPath)
+		warnType := func(n string) {
+			if s := closestType(all, n); s != "" {
+				warn("unknown activity type %q skipped; did you mean %q? (check activity_types in %s or --types; see mkto types)", n, s, cfgPath)
+				return
+			}
+			warn("unknown activity type %q skipped; check activity_types in %s or --types", n, cfgPath)
+		}
+		if f.Changed("types") { // an explicit list always warns
+			for _, n := range unknown {
+				warnType(strings.TrimSpace(n))
+			}
+		} else {
+			warnUnknownTypes(cmd, env, cfg, cfgPath, unknown, warnType)
 		}
 	}
 	if len(typeIDs) == 0 {
@@ -127,32 +176,40 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 		return mapErr(err, cfg, cfgPath)
 	}
 	members, older := windowPrograms(members, since, allPrograms)
-	names := map[int]string{} // successful lookups, cached per run
-	attempted := map[int]bool{}
-	failed, firstErr := 0, error(nil)
-	for _, m := range members {
-		if attempted[m.ProgramID] {
-			continue
-		}
-		if len(attempted) == maxProgramLookups {
-			break
-		}
-		attempted[m.ProgramID] = true
-		p, err := client.Program(ctx, m.ProgramID)
-		switch {
-		case err == nil:
-			names[m.ProgramID] = p.Name
-		case errors.Is(err, marketo.ErrQuotaExhausted) || ctx.Err() != nil:
-			return mapErr(err, cfg, cfgPath)
-		default: // names are cosmetic: degrade to "program <id>"
-			failed++
-			if firstErr == nil {
-				firstErr = err
-			}
-		}
+	ids := make([]int, len(members))
+	for i, m := range members {
+		ids[i] = m.ProgramID
+	}
+	// Each program costs a name lookup and a token lookup; both share the one cap.
+	names, failed, err := lookupNames(ctx, ids, maxProgramLookups, func(id int) (string, error) {
+		p, err := client.Program(ctx, id)
+		return p.Name, err
+	})
+	if lookupFatal(ctx, err) {
+		return mapErr(err, cfg, cfgPath)
 	}
 	if failed > 0 {
-		warn("could not look up %d of %d program names (%s)", failed, len(attempted), lookupHint(firstErr))
+		warn("could not look up %d of %d program names (%s)", failed, len(names)+failed, lookupHint(err))
+	}
+	tokens := map[int]map[string]string{}
+	if len(cfg.Marketo.NameTokens)+len(cfg.Marketo.LinkTokens) > 0 {
+		// Only programs Marketo named: one whose name lookup failed would fail here too.
+		named := slices.DeleteFunc(slices.Clone(ids), func(id int) bool { _, ok := names[id]; return !ok })
+		tokens, failed, err = lookupNames(ctx, named, maxProgramLookups, func(id int) (map[string]string, error) {
+			return client.ProgramTokens(ctx, id)
+		})
+		if lookupFatal(ctx, err) {
+			return mapErr(err, cfg, cfgPath)
+		}
+		if failed > 0 {
+			warn("could not read program tokens for %d of %d programs (%s)", failed, len(tokens)+failed, lookupHint(err))
+		}
+	}
+	programs := make([]output.MembershipJSON, len(members))
+	for i, m := range members {
+		programs[i] = output.MembershipJSON{ID: m.ProgramID, Name: names[m.ProgramID], Status: m.Status, Date: m.Date,
+			AcquiredBy: m.AcquiredBy, Success: m.Success,
+			Title: tokenValue(tokens[m.ProgramID], cfg.Marketo.NameTokens), Link: tokenValue(tokens[m.ProgramID], cfg.Marketo.LinkTokens)}
 	}
 	distinct := map[int]bool{}
 	for _, m := range members {
@@ -166,69 +223,76 @@ func runActivity(cmd *cobra.Command, env Env, email string) error {
 		olderNote = fmt.Sprintf("+ %d older programs (use --all-programs)", older)
 	}
 
+	shown := acts // text hides Change Data Value rows outside change_fields; --json keeps them
+	if allChanges, _ := f.GetBool("all-changes"); !asJSON && !allChanges {
+		shown = changeFiltered(cfg, acts, typeName)
+	}
+	var campaignIDs []int
+	for _, a := range shown {
+		if isChange(a, typeName) {
+			campaignIDs = append(campaignIDs, a.CampaignID)
+		}
+	}
+	campaigns, err := campaignNames(ctx, client, campaignIDs, warn)
+	if err != nil {
+		return mapErr(err, cfg, cfgPath)
+	}
+
 	var buf bytes.Buffer
 	if asJSON {
 		res := output.ActivityJSON{
-			Lead:     output.LeadJSON{ID: lead.ID(), Fields: map[string]any{}},
+			Lead:     leadJSON(cfg, lead, loc),
 			Since:    since,
 			Events:   []output.EventJSON{},
-			Programs: []output.MembershipJSON{},
+			Programs: programs,
 			Notes:    append([]string{}, notes...),
 		}
 		if olderNote != "" {
 			res.Notes = append(res.Notes, olderNote)
 		}
-		for _, k := range cfg.Marketo.LeadFields {
-			res.Lead.Fields[k] = lead[k]
-		}
-		for _, k := range []string{"title", "company"} { // shown in the text header too
-			if v := display(lead[k], loc); v != "" {
-				res.Lead.Fields[k] = lead[k]
-			}
-		}
 		for _, a := range acts {
-			res.Events = append(res.Events, output.EventJSON{ID: a.ID, Date: a.Date.UTC(), Type: label(typeName[a.TypeID], "type", a.TypeID), Primary: a.Primary, Attributes: a.Attributes})
-		}
-		for _, m := range members {
-			res.Programs = append(res.Programs, output.MembershipJSON{ID: m.ProgramID, Name: names[m.ProgramID], Status: m.Status, Date: m.Date})
+			res.Events = append(res.Events, output.EventJSON{ID: a.ID, Date: a.Date.UTC(), Type: label(typeName[a.TypeID], "type", a.TypeID), Primary: a.Primary, PrimaryID: a.PrimaryID, CampaignID: a.CampaignID,
+				Campaign: campaigns[a.CampaignID], Detail: story.Detail(typeName[a.TypeID], a), Attributes: a.Attributes})
 		}
 		err = output.WriteJSON(&buf, res)
 	} else {
-		err = writeActivity(&buf, lead, days, loc, acts, typeName, members, names, olderNote, notes)
+		if n := len(acts) - len(shown); n > 0 {
+			notes = append(notes, fmt.Sprintf("Change Data Value rows hidden by change_fields: %d (use --all-changes)", n))
+		}
+		if verbose, _ := f.GetBool("verbose"); verbose && cfg.Output.LeadURL != "" && !strings.Contains(cfg.Output.LeadURL, "{id}") {
+			fmt.Fprintln(env.Stderr, "note: output.lead_url has no {id}; not showing a record link")
+		}
+		err = writeActivity(&buf, callCard(cfg, loc, lead, shown, typeName, days, env.Now()), days, loc, shown, len(acts)-len(shown), typeName, campaigns, programs, olderNote, notes)
 	}
 	if err != nil {
 		return err
 	}
-	if outPath == "" {
-		_, err = env.Stdout.Write(buf.Bytes())
-		return err
+	return finishOut(env, out, outPath, buf.Bytes())
+}
+
+// openOut opens --out before any Marketo call, so a bad or taken path costs no quota.
+// The file it returns is always mkto's own (mode 0600), so a failed run removes it. With
+// force and an existing target it is a temp file in the same directory, renamed over the
+// target on success, so a failed run leaves the target as it was.
+func openOut(env Env, path string, force bool) (*os.File, error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err == nil {
+		return file, nil
 	}
-	// Tighten the mode before any lead data lands: OpenFile keeps the mode of an existing file.
-	file, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		if env.Getenv("SNAP_NAME") != "" && errors.Is(err, fs.ErrPermission) {
-			return fmt.Errorf("%w; the mkto snap can write only to non-hidden paths in your home folder (home plug), e.g. ~/%s",
-				err, strings.TrimLeft(filepath.Base(outPath), "."))
+	if errors.Is(err, fs.ErrExist) {
+		if !force {
+			return nil, exitError{2, fmt.Errorf("%s exists; use --force to overwrite", path)}
 		}
-		return err
-	}
-	if err := file.Chmod(0o600); err != nil {
-		file.Close()
-		return err
-	}
-	if _, err := file.Write(buf.Bytes()); err != nil {
-		file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	if abs, err := filepath.Abs(outPath); err == nil {
-		if note := snapTmpNote(env.Getenv("SNAP_NAME"), abs); note != "" {
-			fmt.Fprintln(env.Stderr, output.Clean(note))
+		// Not a dot name: the snap's home plug denies hidden files at the top of $HOME.
+		if file, err = os.CreateTemp(filepath.Dir(path), "mkto-out-*.tmp"); err == nil {
+			return file, nil
 		}
 	}
-	return nil
+	if env.Getenv("SNAP_NAME") != "" && errors.Is(err, fs.ErrPermission) {
+		return nil, fmt.Errorf("%w; the mkto snap can write only to non-hidden paths in your home folder (home plug), e.g. ~/%s",
+			err, strings.TrimLeft(filepath.Base(path), "."))
+	}
+	return nil, err
 }
 
 // snapTmpNote explains where a /tmp file really went: a strict snap gets a private /tmp.
@@ -264,10 +328,45 @@ func lookupHint(err error) string {
 	return err.Error() // warn cleans it
 }
 
+// isChange: a is a score, data-value or progression change made by a smart campaign.
+func isChange(a marketo.Activity, typeName map[int]string) bool {
+	return a.CampaignID > 0 && slices.ContainsFunc(whyTypes, func(w string) bool { return strings.EqualFold(w, strings.TrimSpace(typeName[a.TypeID])) })
+}
+
+// campaignNames looks up smart campaign names, at most maxCampaignLookups. A failed
+// lookup only warns, once for the run; a quota or ctx error is returned.
+func campaignNames(ctx context.Context, client *marketo.Client, ids []int, warn func(string, ...any)) (map[int]string, error) {
+	names, failed, err := lookupNames(ctx, ids, maxCampaignLookups, func(id int) (string, error) { return client.SmartCampaign(ctx, id) })
+	if lookupFatal(ctx, err) {
+		return nil, err
+	}
+	if failed > 0 {
+		warn("could not look up %d of %d campaign names (%s)", failed, len(names)+failed, lookupHint(err))
+	}
+	if d := len(distinctInts(ids)); d > maxCampaignLookups {
+		warn("showing names for %d of %d campaigns; the rest show their id", maxCampaignLookups, d)
+	}
+	return names, nil
+}
+
+// detail is a's timeline detail, plus the smart campaign behind a change: its quoted
+// name, or "campaign <id>" when it wasn't looked up.
+func detail(a marketo.Activity, typeName map[int]string, campaigns map[int]string) string {
+	d := story.Detail(typeName[a.TypeID], a)
+	if !isChange(a, typeName) {
+		return d
+	}
+	via := `"` + campaigns[a.CampaignID] + `"`
+	if campaigns[a.CampaignID] == "" {
+		via = label("", "campaign", a.CampaignID)
+	}
+	return strings.TrimSpace(d + " via " + via)
+}
+
 // pickLead chooses the lead to show and returns the duplicates note, if any.
-func pickLead(leads []marketo.Lead, leadID int, email string) (marketo.Lead, []string, error) {
+func pickLead(leads []marketo.Lead, leadID int, by, value string) (marketo.Lead, []string, error) {
 	if len(leads) == 0 {
-		return nil, nil, exitError{3, fmt.Errorf("no lead found for %s", email)}
+		return nil, nil, exitError{3, fmt.Errorf("no lead found for %s", lookupName(by, value))}
 	}
 	if leadID != 0 {
 		for _, l := range leads {
@@ -275,7 +374,7 @@ func pickLead(leads []marketo.Lead, leadID int, email string) (marketo.Lead, []s
 				return l, nil, nil
 			}
 		}
-		return nil, nil, exitError{3, fmt.Errorf("lead %d not found for %s", leadID, email)}
+		return nil, nil, exitError{3, fmt.Errorf("lead %d not found for %s", leadID, lookupName(by, value))}
 	}
 	best := leads[0]
 	for _, l := range leads[1:] {
@@ -294,8 +393,28 @@ func pickLead(leads []marketo.Lead, leadID int, email string) (marketo.Lead, []s
 			others = append(others, strconv.Itoa(l.ID()))
 		}
 	}
-	return best, []string{fmt.Sprintf("%d leads share this email; showing %d (most recently updated). Others: %s. Use --lead-id to pick one.",
-		len(leads), best.ID(), strings.Join(others, ", "))}, nil
+	return best, []string{fmt.Sprintf("%d leads share this %s; showing %d (most recently updated). Others: %s. Use --lead-id to pick one.",
+		len(leads), by, best.ID(), strings.Join(others, ", "))}, nil
+}
+
+// tokenValue returns the trimmed value of the first of names that tokens has, matching
+// case-insensitively with or without a leading "my.", or "" if none has a value.
+func tokenValue(tokens map[string]string, names []string) string {
+	bare := func(s string) string {
+		s = strings.TrimSpace(s)
+		if len(s) > 3 && strings.EqualFold(s[:3], "my.") {
+			return s[3:]
+		}
+		return s
+	}
+	for _, n := range names {
+		for _, k := range slices.Sorted(maps.Keys(tokens)) { // sorted: "Name" and "my.Name" both present picks one stably
+			if v := strings.TrimSpace(tokens[k]); v != "" && strings.EqualFold(bare(k), bare(n)) {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 func label(name, prefix string, id int) string {
@@ -305,43 +424,169 @@ func label(name, prefix string, id int) string {
 	return fmt.Sprintf("%s %d", prefix, id)
 }
 
-func writeActivity(w *bytes.Buffer, lead marketo.Lead, days int, loc *time.Location, acts []marketo.Activity,
-	typeName map[int]string, members []marketo.Membership, names map[int]string, olderNote string, notes []string) error {
-	head := []string{fmt.Sprintf("Lead %d", lead.ID())}
-	for _, k := range []string{"title", "company"} {
+// cardFields are the profile fields on the call card's second line, in order, with their
+// prefixes; the owner follows them. The names are UNVERIFIED on a real instance; correct them here.
+var cardFields = []struct{ key, prefix string }{
+	{"leadScore", "score "},
+	{"leadStatus", ""},
+}
+
+// owner is the lead's owner for the card, leads and account: the owner's email where the
+// instance has it, else the Salesforce owner's user id.
+func owner(l marketo.Lead, loc *time.Location) string {
+	if s := display(l["leadOwnerEmailAddress"], loc); s != "" {
+		return s
+	}
+	return display(l["sfdcLeadOwnerId"], loc)
+}
+
+// countLabels are the card's singular and plural labels by lower-cased type name; other
+// types are counted under their own name.
+var countLabels = map[string][2]string{
+	"fill out form":                {"form", "forms"},
+	"open email":                   {"open", "opens"},
+	"click email":                  {"click", "clicks"},
+	"email bounced":                {"bounce", "bounces"},
+	"email bounced soft":           {"soft bounce", "soft bounces"},
+	"unsubscribe email":            {"unsubscribe", "unsubscribes"},
+	"change score":                 {"score change", "score changes"},
+	"change data value":            {"field change", "field changes"},
+	"change status in progression": {"status change", "status changes"},
+	"new lead":                     {"new lead", "new leads"},
+	"visit webpage":                {"page visit", "page visits"},
+	"click link":                   {"link click", "link clicks"},
+}
+
+// countOrder breaks ties between equal counts: what a rep acts on first.
+var countOrder = []string{"fill out form", "click email", "open email", "change score", "change status in progression",
+	"change data value", "visit webpage", "click link", "email bounced", "email bounced soft", "unsubscribe email", "new lead"}
+
+// maxCardCounts keeps the counts line short; the timeline below has the rest.
+const maxCardCounts = 5
+
+// cardExtras are the lead fields the call card needs beyond lead_fields.
+func cardExtras(cfg *config.Config) []string {
+	return append([]string{"id", "updatedAt", "firstName", "lastName", "title", "company"}, cfg.Marketo.ProfileFields...)
+}
+
+// leadJSON is the --json lead: lead_fields, plus the card's name, job and profile values when present.
+func leadJSON(cfg *config.Config, lead marketo.Lead, loc *time.Location) output.LeadJSON {
+	l := output.LeadJSON{ID: lead.ID(), Fields: map[string]any{}}
+	for _, k := range cfg.Marketo.LeadFields {
+		l.Fields[k] = lead[k]
+	}
+	for _, k := range []string{"firstName", "lastName", "title", "company"} { // shown on the text card too
 		if v := display(lead[k], loc); v != "" {
-			head = append(head, v)
+			l.Fields[k] = lead[k]
 		}
 	}
-	head = append(head, fmt.Sprintf("last %d days", days))
-	fmt.Fprintf(w, "%s\n\n", output.Clean(strings.Join(head, " · ")))
+	for _, k := range cfg.Marketo.ProfileFields {
+		if lead[k] != nil {
+			l.Fields[k] = lead[k]
+		}
+	}
+	return l
+}
 
-	if len(acts) == 0 {
+// callCard returns the lines above the timeline: who, profile values, the window's touches
+// and the record link. A line with nothing to show is left out.
+func callCard(cfg *config.Config, loc *time.Location, lead marketo.Lead, acts []marketo.Activity, typeName map[int]string, days int, now time.Time) []string {
+	var card []string
+	add := func(sep string, parts ...string) {
+		if parts = slices.DeleteFunc(parts, func(p string) bool { return p == "" }); len(parts) > 0 {
+			card = append(card, strings.Join(parts, sep))
+		}
+	}
+	v := func(k string) string { return display(lead[k], loc) }
+	add(" · ", strings.TrimSpace(v("firstName")+" "+v("lastName")), strings.Join(slices.DeleteFunc([]string{v("title"), v("company")},
+		func(p string) bool { return p == "" }), " @ "), fmt.Sprintf("lead %d", lead.ID()))
+	var profile []string
+	for _, f := range cardFields {
+		if s := v(f.key); s != "" {
+			profile = append(profile, f.prefix+s)
+		}
+	}
+	if s := owner(lead, loc); s != "" {
+		profile = append(profile, "owner "+s)
+	}
+	add(" · ", profile...)
+
+	sum := story.Summarize(acts, typeName, now)
+	var line []string
+	if !sum.LastTouch.IsZero() {
+		line = append(line, "last touch "+story.Ago(sum.LastTouch.In(loc), now))
+	}
+	if parts := countParts(sum.Counts); len(parts) > 0 {
+		if len(parts) > maxCardCounts {
+			parts = append(parts[:maxCardCounts], fmt.Sprintf("+%d more", len(parts)-maxCardCounts))
+		}
+		line = append(line, fmt.Sprintf("%dd: %s", days, strings.Join(parts, ", ")))
+	}
+	add(" · ", append(line, "times in "+zoneName(cfg, now))...)
+	if u := cfg.Output.LeadURL; strings.Contains(u, "{id}") {
+		card = append(card, "open: "+strings.ReplaceAll(u, "{id}", strconv.Itoa(lead.ID())))
+	}
+	return card
+}
+
+func writeActivity(w *bytes.Buffer, card []string, days int, loc *time.Location, acts []marketo.Activity, hidden int,
+	typeName, campaigns map[int]string, programs []output.MembershipJSON, olderNote string, notes []string) error {
+	for _, l := range card {
+		fmt.Fprintln(w, output.Clean(l))
+	}
+	if len(card) > 0 {
+		fmt.Fprintln(w)
+	}
+
+	if len(acts) == 0 && hidden > 0 {
+		fmt.Fprintf(w, "Nothing to show: every activity in the last %d days is a field change hidden by change_fields.\n", days)
+	} else if len(acts) == 0 {
 		fmt.Fprintf(w, "No activity in the last %d days.\nMarketo purges some high-volume activity types after a limited period.\n", days)
 	} else {
 		rows := make([][]string, len(acts))
 		for i, a := range acts {
-			rows[i] = []string{a.Date.In(loc).Format("2006-01-02 15:04"), label(typeName[a.TypeID], "type", a.TypeID), a.Primary}
+			rows[i] = []string{a.Date.In(loc).Format("2006-01-02 15:04"), label(typeName[a.TypeID], "type", a.TypeID), a.Primary,
+				detail(a, typeName, campaigns)}
 		}
-		if err := output.Table(w, rows); err != nil {
+		var tb bytes.Buffer
+		if err := output.Table(&tb, rows); err != nil {
 			return err
+		}
+		for l := range strings.Lines(tb.String()) { // an empty detail would leave padding
+			fmt.Fprintln(w, strings.TrimRight(l, " \n"))
 		}
 	}
 
 	fmt.Fprint(w, "\nPrograms\n")
-	if len(members) == 0 {
+	if len(programs) == 0 {
 		fmt.Fprint(w, "  (none)\n")
 	}
-	rows := make([][]string, len(members))
-	for i, m := range members {
-		n, ok := names[m.ProgramID]
-		if !ok {
-			n = fmt.Sprintf("program %d", m.ProgramID)
+	rows := make([][]string, len(programs))
+	for i, p := range programs {
+		n := label(p.Name, "program", p.ID)
+		if p.Title != "" {
+			n = p.Title + " (" + n + ")"
 		}
-		rows[i] = []string{"  " + n, m.Status}
+		status := p.Status
+		if p.AcquiredBy {
+			status += " ★ acquired"
+		}
+		if p.Success {
+			status += " ✓ success"
+		}
+		rows[i] = []string{"  " + n, status}
 	}
-	if err := output.Table(w, rows); err != nil {
+	var tb bytes.Buffer
+	if err := output.Table(&tb, rows); err != nil {
 		return err
+	}
+	i := 0
+	for l := range strings.Lines(tb.String()) { // one line per row; the link goes under it, outside the columns
+		w.WriteString(l)
+		if programs[i].Link != "" {
+			fmt.Fprintln(w, "    "+output.Clean(programs[i].Link))
+		}
+		i++
 	}
 	if olderNote != "" {
 		fmt.Fprintln(w, olderNote)
@@ -353,4 +598,24 @@ func writeActivity(w *bytes.Buffer, lead marketo.Lead, days int, loc *time.Locat
 		}
 	}
 	return nil
+}
+
+func distinctInts(ids []int) map[int]bool {
+	m := map[int]bool{}
+	for _, id := range ids {
+		m[id] = true
+	}
+	return m
+}
+
+// changeFiltered drops the Change Data Value rows for fields outside change_fields (an
+// empty list keeps every field), so the timeline and the card's counts skip sync noise.
+func changeFiltered(cfg *config.Config, acts []marketo.Activity, typeName map[int]string) []marketo.Activity {
+	if len(cfg.Marketo.ChangeFields) == 0 {
+		return acts
+	}
+	return slices.DeleteFunc(slices.Clone(acts), func(a marketo.Activity) bool {
+		return strings.EqualFold(typeName[a.TypeID], "Change Data Value") && !slices.ContainsFunc(cfg.Marketo.ChangeFields,
+			func(n string) bool { return strings.EqualFold(strings.TrimSpace(n), story.ChangeField(a)) })
+	})
 }

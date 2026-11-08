@@ -1,0 +1,18 @@
+Jane Doe · lead 1001
+last touch 18d ago · 60d: 2 score changes, 2 field changes, 1 form, 1 click, 1 open, +5 more · times in Asia/Tbilisi
+
+2026-10-01 12:00  New Lead                      2026-10-01
+2026-10-05 13:00  Change Data Value             Lead Status            Nurture→MQL via "Score Threshold"
+2026-10-10 14:00  Fill Out Form                 Contact Us Form
+2026-10-10 14:00  Change Score                  Behavior Score         +25 (60→85) Filled out form via "Behavior Scoring"
+2026-10-11 12:30  Open Email                    Example Welcome Email
+2026-10-11 12:31  Click Email                   Example Welcome Email  https://www.example.com/whitepaper
+2026-10-12 16:00  Change Status in Progression  Example Webinar 2026   → Attended ✓ success via "Webinar Attendance"
+2026-10-15 13:00  Email Bounced                 Example Newsletter     hardbounce: 550 5.1.1 mailbox unknown
+2026-10-16 13:00  Email Bounced Soft            Example Newsletter     softbounce: 452 4.2.2 mailbox full
+2026-10-17 13:00  Unsubscribe Email             Example Newsletter
+2026-10-18 13:00  Change Score                  Behavior Score         -10 (85→75) Email bounced via "Behavior Scoring"
+2026-10-20 13:00  Change Data Value             Lead Status            MQL→Disqualified via "Disqualify Bounced"
+
+Programs
+  Example Webinar 2026  Member ★ acquired

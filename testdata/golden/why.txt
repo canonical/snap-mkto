@@ -1,0 +1,26 @@
+Jane Doe · lead 1001
+score 85 · MQL · owner a.rep@example.com
+last touch 18d ago · 90d: 2 score changes, 2 field changes, 1 form, 1 click, 1 open, +5 more · times in Asia/Tbilisi
+
+rule: Behavior Score ≥ 80 · MQL when Lead Status in [MQL] · DQ in [Disqualified, Recycled]
+
+DATE              FIELD           CHANGE            Δ    REASON                                        CAMPAIGN
+2026-10-05 13:00  Lead Status     Nurture→MQL            Changed by smart campaign Score Threshold     Score Threshold
+2026-10-10 14:00  Behavior Score  60→85             +25  Filled out form                               Behavior Scoring
+2026-10-18 13:00  Behavior Score  85→75             -10  Email bounced                                 Behavior Scoring
+2026-10-20 13:00  Lead Status     MQL→Disqualified       Changed by smart campaign Disqualify Bounced  Disqualify Bounced
+
+2026-10-05 13:00  MQL
+  before: 2026-10-01 12:00 New Lead 2026-10-01 (4d before)
+2026-10-10 14:00  crossed 80
+  near: 2026-10-10 14:00 Fill Out Form Contact Us Form
+2026-10-18 13:00  dropped below 80
+  before: 2026-10-17 13:00 Unsubscribe Email Example Newsletter (1d before)
+  before: 2026-10-16 13:00 Email Bounced Soft Example Newsletter (2d before)
+  before: 2026-10-15 13:00 Email Bounced Example Newsletter (3d before)
+2026-10-20 13:00  DQ
+  before: 2026-10-17 13:00 Unsubscribe Email Example Newsletter (3d before)
+  before: 2026-10-16 13:00 Email Bounced Soft Example Newsletter (4d before)
+  before: 2026-10-15 13:00 Email Bounced Example Newsletter (5d before)
+
+now: Behavior Score 75, Lead Status Disqualified

@@ -1,0 +1,7 @@
+Account 001EXAMPLE000001AAA · 4 leads · last 14 days · times in Asia/Tbilisi
+
+NAME       TITLE          SCORE  STATUS   OWNER              LAST TOUCH  14D
+John Roe   =HYPERLINK(1)  85     Nurture  -                  18d ago     1 form
+Sam Poe    -              40     New      -                  30m ago     1 open
+Jane Doe   CTO            40     MQL      owner@example.com  1h ago      2 forms, 1 click, 1 open
+lead 1004  -              n/a    -        -                  -           -

@@ -1,7 +1,8 @@
-Lead 1001 · last 30 days
+Jane Doe · lead 1001
+last touch 5d ago · 30d: 1 form, 1 page visit · times in Asia/Tbilisi
 
 2026-11-01 14:00  Visit Webpage  www.example.com/pricing
 2026-11-02 15:30  Fill Out Form  Contact Us Form
 
 Programs
-  Example Webinar 2026  Member
+  Example Webinar 2026  Member ★ acquired

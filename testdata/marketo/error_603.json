@@ -1,0 +1,7 @@
+{
+  "requestId": "req#1",
+  "success": false,
+  "errors": [
+    {"code": "603", "message": "Access denied"}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"id": 1001, "email": "jane.doe@example.com", "firstName": "Jane", "lastName": "Doe", "sfdcAccountId": "001EXAMPLE000001AAA", "leadScore": 85, "leadStatus": "MQL"},
+    {"id": 1002, "email": "john.roe@example.com", "firstName": "John", "lastName": "Roe", "sfdcAccountId": "001EXAMPLE000001AAA", "leadScore": 40, "leadStatus": "Nurture"}
+  ],
+  "nextPageToken": "EXAMPLELEADPAGE2====",
+  "moreResult": true
+}

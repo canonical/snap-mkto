@@ -1,0 +1,111 @@
+[
+  {
+    "id": 2,
+    "name": "Fill Out Form",
+    "description": "Fill out form on web page",
+    "primary": "Webform ID",
+    "attributes": [
+      "Client IP Address",
+      "Form Fields",
+      "Query Parameters",
+      "Referrer URL",
+      "User Agent",
+      "Webpage ID"
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Email Bounced",
+    "description": "Email bounced",
+    "primary": "Mailing ID",
+    "attributes": [
+      "Category",
+      "Details",
+      "Email"
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Unsubscribe Email",
+    "description": "Unsubscribe from email",
+    "primary": "Mailing ID",
+    "attributes": []
+  },
+  {
+    "id": 10,
+    "name": "Open Email",
+    "description": "Open email",
+    "primary": "Mailing ID",
+    "attributes": [
+      "Device",
+      "User Agent"
+    ]
+  },
+  {
+    "id": 11,
+    "name": "Click Email",
+    "description": "Click link in email",
+    "primary": "Mailing ID",
+    "attributes": [
+      "Device",
+      "Link"
+    ]
+  },
+  {
+    "id": 12,
+    "name": "New Lead",
+    "description": "New lead created",
+    "primary": "Created Date",
+    "attributes": [
+      "Source Type"
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Change Data Value",
+    "description": "Change data value",
+    "primary": "Attribute Name",
+    "attributes": [
+      "New Value",
+      "Old Value",
+      "Reason",
+      "Source"
+    ]
+  },
+  {
+    "id": 22,
+    "name": "Change Status in Progression",
+    "description": "Change status in program progression",
+    "primary": "Program ID",
+    "attributes": [
+      "New Status",
+      "Old Status",
+      "Program Member ID",
+      "Reason",
+      "Success"
+    ]
+  },
+  {
+    "id": 27,
+    "name": "Email Bounced Soft",
+    "description": "Email bounced softly",
+    "primary": "Mailing ID",
+    "attributes": [
+      "Category",
+      "Details",
+      "Email"
+    ]
+  },
+  {
+    "id": 100,
+    "name": "Change Score",
+    "description": "Change score value",
+    "primary": "Score Name",
+    "attributes": [
+      "Change Value",
+      "New Value",
+      "Old Value",
+      "Reason"
+    ]
+  }
+]

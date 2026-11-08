@@ -6,6 +6,7 @@ package marketo
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"testing"
 	"time"
@@ -84,5 +85,28 @@ func TestMembershipDates(t *testing.T) {
 		if !m.Date.Equal(want[i]) {
 			t.Errorf("membership %d date = %v, want %v", m.ProgramID, m.Date, want[i])
 		}
+	}
+}
+
+func TestMembershipCreditDecoded(t *testing.T) {
+	s := marketotest.New(t)
+	s.Handle("/rest/v1/leads/1001/programMembership.json", marketotest.Response{Body: "program_membership_one.json"})
+	ms, err := newHarness(s, Options{}).c.Memberships(context.Background(), 1001)
+	if err != nil || len(ms) != 1 || !ms[0].AcquiredBy || ms[0].Success {
+		t.Fatalf("Memberships = %+v, %v; want acquiredBy true, success false", ms, err)
+	}
+}
+
+func TestProgramTokensDecoded(t *testing.T) {
+	s := marketotest.New(t)
+	const path = "/rest/asset/v1/folder/4001/tokens.json"
+	s.Handle(path, marketotest.Response{Body: "program_tokens_one.json"})
+	got, err := newHarness(s, Options{}).c.ProgramTokens(context.Background(), 4001)
+	want := map[string]string{"Name": "Example Whitepaper 2026", "WPlink": "https://www.example.com/whitepaper"}
+	if err != nil || !maps.Equal(got, want) {
+		t.Fatalf("ProgramTokens = %v, %v; want %v", got, err, want)
+	}
+	if q := s.Query(path).Get("folderType"); q != "Program" {
+		t.Errorf("folderType = %q", q)
 	}
 }

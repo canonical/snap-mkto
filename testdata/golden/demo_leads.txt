@@ -1,0 +1,5 @@
+EMAIL                 ID         SCORE  STATUS   OWNER              UPDATED           LAST TOUCH  14D
+jane.doe@example.com  1001       85     MQL      a.rep@example.com  2026-11-06 13:15  2h ago      1 form, 1 click, 1 open
+john.roe@example.com  1002       42     Nurture  a.rep@example.com  2026-11-02 18:40  3d ago      2 opens
+sam.poe@example.com   1003       12     New      -                  2026-10-28 12:05  -           -
+nobody@example.com    not found  -      -        -                  -                 -           -

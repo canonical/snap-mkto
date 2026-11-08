@@ -1,0 +1,14 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {
+      "date": "2026-11-08",
+      "total": 7,
+      "errors": [
+        {"errorCode": "1006", "count": 5},
+        {"errorCode": "603", "count": 2}
+      ]
+    }
+  ]
+}

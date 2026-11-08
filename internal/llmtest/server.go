@@ -153,7 +153,7 @@ func Payload(t testing.TB) redact.Payload {
 		{ID: 2, Date: day.Add(15 * time.Hour), TypeID: 1, Primary: "https://ubuntu.com/pro?mkt_tok=abc"},
 		{ID: 3, Date: day.Add(16 * time.Hour), TypeID: 2, Primary: "Contact us - Ubuntu Pro"},
 	}
-	p, err := redact.Build(lead, acts, map[int]string{7: "Open Email", 1: "Visit Webpage", 2: "Fill Out Form"})
+	p, err := redact.Build(lead, acts, map[int]string{7: "Open Email", 1: "Visit Webpage", 2: "Fill Out Form"}, redact.Options{})
 	if err != nil {
 		t.Fatalf("llmtest: building payload: %v", err)
 	}

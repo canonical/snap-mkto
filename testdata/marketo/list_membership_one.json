@@ -1,0 +1,8 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"listId": 5001, "createdAt": "2026-09-01T10:00:00Z+0000", "updatedAt": "2026-09-01T10:00:00Z+0000"}
+  ],
+  "moreResult": false
+}

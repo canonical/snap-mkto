@@ -88,3 +88,37 @@ func TestUnknownCommandExit2(t *testing.T) {
 		t.Errorf("exit = %d, want 2", code)
 	}
 }
+
+func TestUnknownCommandSuggests(t *testing.T) {
+	out, errOut, code := exec(t, nil, "leed")
+	if want := "unknown command \"leed\" for \"mkto\"\n\nDid you mean this?\n  lead\n  leads\n"; code != 2 || out != "" || errOut != want {
+		t.Errorf("exit %d, stdout %q, stderr %q; want exit 2, stderr %q", code, out, errOut, want)
+	}
+	// Nothing close: no suggestion block.
+	if _, errOut, code := exec(t, nil, "zzzzzz"); code != 2 || errOut != "unknown command \"zzzzzz\" for \"mkto\"\n" {
+		t.Errorf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+func TestDaysParseFriendly(t *testing.T) {
+	const days = "--days takes a whole number of days, e.g. --days 30\n"
+	const id = "--lead-id takes a lead id number, e.g. --lead-id 1001\n"
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"activity", "jane@example.com", "--days", "2w"}, days},
+		{[]string{"activity", "jane@example.com", "--days=2w"}, days},
+		{[]string{"brief", "jane@example.com", "--days", "2w"}, days},
+		{[]string{"activity", "jane@example.com", "--lead-id", "x"}, id},
+		{[]string{"brief", "jane@example.com", "--lead-id", "1e3"}, id},
+	} {
+		if _, errOut, code := exec(t, nil, c.args...); code != 2 || errOut != c.want {
+			t.Errorf("%v: exit %d, stderr %q; want exit 2, %q", c.args, code, errOut, c.want)
+		}
+	}
+	// Other flag errors keep pflag's text.
+	if _, errOut, code := exec(t, nil, "activity", "jane@example.com", "--web=maybe"); code != 2 || !strings.HasPrefix(errOut, `invalid argument "maybe" for "--web" flag`) {
+		t.Errorf("exit %d, stderr %q", code, errOut)
+	}
+}

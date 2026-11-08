@@ -1,0 +1,13 @@
+Lead 1001
+id         1001
+email      jane.doe@example.com
+firstName  Jane
+lastName   Doe
+createdAt  2025-01-10 13:00
+updatedAt  2026-10-01 16:00
+
+Static lists (3)
+LIST ID  ADDED
+5002     2026-10-15 12:30
+5001     2026-09-01 14:00
+5003     -

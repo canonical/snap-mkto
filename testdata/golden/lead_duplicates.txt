@@ -1,16 +1,4 @@
-Lead 1001
-id         1001
-email      jane.doe@example.com
-firstName  Jane
-lastName   Doe
-createdAt  2025-01-10 13:00
-updatedAt  2026-10-01 16:00
-
-Lead 1002
-id         1002
-email      jane.doe@example.com
-firstName  Jane
-lastName   Doe
-createdAt  2025-01-10 13:00
-updatedAt  2026-06-15 12:30
-note: 2 leads share this email (ids: 1001, 1002); use --lead-id with mkto activity
+FIELD      1001              1002
+id         1001              1002
+updatedAt  2026-10-01 16:00  2026-06-15 12:30
+4 fields are the same in every lead (not shown)

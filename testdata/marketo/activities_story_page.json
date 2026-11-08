@@ -1,0 +1,68 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"id": 6001, "marketoGUID": "6001", "leadId": 1001, "activityDate": "2026-10-01T08:00:00Z", "activityTypeId": 12, "primaryAttributeValueId": 1001, "primaryAttributeValue": "2026-10-01", "attributes": [
+      {"name": "Source Type", "value": "Web form fillout"}
+    ]},
+    {"id": 6002, "marketoGUID": "6002", "leadId": 1001, "activityDate": "2026-10-05T09:00:00Z", "activityTypeId": 13, "campaignId": 3001, "primaryAttributeValueId": 2, "primaryAttributeValue": "Lead Status", "attributes": [
+      {"name": "Old Value", "value": "Nurture"},
+      {"name": "New Value", "value": "MQL"},
+      {"name": "Reason", "value": "Changed by smart campaign Score Threshold"},
+      {"name": "Source", "value": "Campaign"}
+    ]},
+    {"id": 6003, "marketoGUID": "6003", "leadId": 1001, "activityDate": "2026-10-10T10:00:00Z", "activityTypeId": 2, "primaryAttributeValueId": 12, "primaryAttributeValue": "Contact Us Form", "attributes": [
+      {"name": "Webpage ID", "value": "15"},
+      {"name": "Query Parameters", "value": "utm_source=example&utm_medium=email"},
+      {"name": "Client IP Address", "value": "192.0.2.10"},
+      {"name": "User Agent", "value": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0"},
+      {"name": "Form Fields", "value": "{\"Email\":\"jane.doe@example.com\"}"}
+    ]},
+    {"id": 6004, "marketoGUID": "6004", "leadId": 1001, "activityDate": "2026-10-10T10:00:05Z", "activityTypeId": 100, "campaignId": 3002, "primaryAttributeValueId": 5, "primaryAttributeValue": "Behavior Score", "attributes": [
+      {"name": "Change Value", "value": "+25"},
+      {"name": "Old Value", "value": "60"},
+      {"name": "New Value", "value": "85"},
+      {"name": "Reason", "value": "Filled out form"}
+    ]},
+    {"id": 6005, "marketoGUID": "6005", "leadId": 1001, "activityDate": "2026-10-11T08:30:00Z", "activityTypeId": 10, "primaryAttributeValueId": 801, "primaryAttributeValue": "Example Welcome Email", "attributes": [
+      {"name": "Device", "value": "Computer"},
+      {"name": "User Agent", "value": "Mozilla/5.0 (X11; Linux x86_64) ExampleBrowser/1.0"}
+    ]},
+    {"id": 6006, "marketoGUID": "6006", "leadId": 1001, "activityDate": "2026-10-11T08:31:00Z", "activityTypeId": 11, "primaryAttributeValueId": 801, "primaryAttributeValue": "Example Welcome Email", "attributes": [
+      {"name": "Link", "value": "https://www.example.com/whitepaper"},
+      {"name": "Device", "value": "Computer"}
+    ]},
+    {"id": 6007, "marketoGUID": "6007", "leadId": 1001, "activityDate": "2026-10-12T12:00:00Z", "activityTypeId": 22, "campaignId": 3003, "primaryAttributeValueId": 4001, "primaryAttributeValue": "Example Webinar 2026", "attributes": [
+      {"name": "Old Status", "value": "Registered"},
+      {"name": "New Status", "value": "Attended"},
+      {"name": "Reason", "value": "Updated by smart campaign"},
+      {"name": "Success", "value": "true"},
+      {"name": "Program Member ID", "value": "90001"}
+    ]},
+    {"id": 6008, "marketoGUID": "6008", "leadId": 1001, "activityDate": "2026-10-15T09:00:00Z", "activityTypeId": 8, "primaryAttributeValueId": 802, "primaryAttributeValue": "Example Newsletter", "attributes": [
+      {"name": "Category", "value": "hardbounce"},
+      {"name": "Details", "value": "550 5.1.1 mailbox unknown"},
+      {"name": "Email", "value": "jane.doe@example.com"}
+    ]},
+    {"id": 6009, "marketoGUID": "6009", "leadId": 1001, "activityDate": "2026-10-16T09:00:00Z", "activityTypeId": 27, "primaryAttributeValueId": 802, "primaryAttributeValue": "Example Newsletter", "attributes": [
+      {"name": "Category", "value": "softbounce"},
+      {"name": "Details", "value": "452 4.2.2 mailbox full"},
+      {"name": "Email", "value": "jane.doe@example.com"}
+    ]},
+    {"id": 6010, "marketoGUID": "6010", "leadId": 1001, "activityDate": "2026-10-17T09:00:00Z", "activityTypeId": 9, "primaryAttributeValueId": 802, "primaryAttributeValue": "Example Newsletter", "attributes": []},
+    {"id": 6011, "marketoGUID": "6011", "leadId": 1001, "activityDate": "2026-10-18T09:00:00Z", "activityTypeId": 100, "campaignId": 3002, "primaryAttributeValueId": 5, "primaryAttributeValue": "Behavior Score", "attributes": [
+      {"name": "Change Value", "value": "-10"},
+      {"name": "Old Value", "value": "85"},
+      {"name": "New Value", "value": "75"},
+      {"name": "Reason", "value": "Email bounced"}
+    ]},
+    {"id": 6012, "marketoGUID": "6012", "leadId": 1001, "activityDate": "2026-10-20T09:00:00Z", "activityTypeId": 13, "campaignId": 3004, "primaryAttributeValueId": 2, "primaryAttributeValue": "Lead Status", "attributes": [
+      {"name": "Old Value", "value": "MQL"},
+      {"name": "New Value", "value": "Disqualified"},
+      {"name": "Reason", "value": "Changed by smart campaign Disqualify Bounced"},
+      {"name": "Source", "value": "Campaign"}
+    ]}
+  ],
+  "nextPageToken": "EXAMPLETOKENSTORY====",
+  "moreResult": false
+}
