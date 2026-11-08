@@ -224,11 +224,8 @@ func runActivity(cmd *cobra.Command, env Env, value string) (err error) {
 	}
 
 	shown := acts // text hides Change Data Value rows outside change_fields; --json keeps them
-	if allChanges, _ := f.GetBool("all-changes"); !asJSON && len(cfg.Marketo.ChangeFields) > 0 && !allChanges {
-		shown = slices.DeleteFunc(slices.Clone(acts), func(a marketo.Activity) bool {
-			return strings.EqualFold(typeName[a.TypeID], "Change Data Value") && !slices.ContainsFunc(cfg.Marketo.ChangeFields,
-				func(n string) bool { return strings.EqualFold(strings.TrimSpace(n), story.ChangeField(a)) })
-		})
+	if allChanges, _ := f.GetBool("all-changes"); !asJSON && !allChanges {
+		shown = changeFiltered(cfg, acts, typeName)
 	}
 	var campaignIDs []int
 	for _, a := range shown {
@@ -265,7 +262,7 @@ func runActivity(cmd *cobra.Command, env Env, value string) (err error) {
 		if verbose, _ := f.GetBool("verbose"); verbose && cfg.Output.LeadURL != "" && !strings.Contains(cfg.Output.LeadURL, "{id}") {
 			fmt.Fprintln(env.Stderr, "note: output.lead_url has no {id}; not showing a record link")
 		}
-		err = writeActivity(&buf, callCard(cfg, loc, lead, acts, typeName, days, env.Now()), days, loc, shown, len(acts)-len(shown), typeName, campaigns, programs, olderNote, notes)
+		err = writeActivity(&buf, callCard(cfg, loc, lead, shown, typeName, days, env.Now()), days, loc, shown, len(acts)-len(shown), typeName, campaigns, programs, olderNote, notes)
 	}
 	if err != nil {
 		return err
@@ -609,4 +606,16 @@ func distinctInts(ids []int) map[int]bool {
 		m[id] = true
 	}
 	return m
+}
+
+// changeFiltered drops the Change Data Value rows for fields outside change_fields (an
+// empty list keeps every field), so the timeline and the card's counts skip sync noise.
+func changeFiltered(cfg *config.Config, acts []marketo.Activity, typeName map[int]string) []marketo.Activity {
+	if len(cfg.Marketo.ChangeFields) == 0 {
+		return acts
+	}
+	return slices.DeleteFunc(slices.Clone(acts), func(a marketo.Activity) bool {
+		return strings.EqualFold(typeName[a.TypeID], "Change Data Value") && !slices.ContainsFunc(cfg.Marketo.ChangeFields,
+			func(n string) bool { return strings.EqualFold(strings.TrimSpace(n), story.ChangeField(a)) })
+	})
 }

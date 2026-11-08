@@ -1116,5 +1116,10 @@ func TestChangeFieldsDefaultAndEmpty(t *testing.T) {
 			strings.Contains(out, "hidden by change_fields: 1") != c.hidden {
 			t.Errorf("%s: hidden = %t, got:\n%s", c.name, c.hidden, out)
 		}
+		// The call card counts what the timeline shows: hidden field changes aren't touches.
+		want := map[bool]string{true: "60d: 1 field change", false: "60d: 2 field changes"}[c.hidden]
+		if !strings.Contains(out, want) {
+			t.Errorf("%s: card lacks %q:\n%s", c.name, want, out)
+		}
 	}
 }

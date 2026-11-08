@@ -212,7 +212,7 @@ func runWhy(cmd *cobra.Command, env Env, value string) error {
 		}
 		err = output.WriteJSON(&buf, res)
 	} else {
-		err = writeWhy(&buf, callCard(cfg, loc, lead, acts, typeName, days, env.Now()), rules, days, loc, steps, marks, typeName, campaigns)
+		err = writeWhy(&buf, callCard(cfg, loc, lead, changeFiltered(cfg, acts, typeName), typeName, days, env.Now()), rules, days, loc, steps, marks, typeName, campaigns)
 	}
 	if err != nil {
 		return err
