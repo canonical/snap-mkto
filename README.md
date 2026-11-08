@@ -53,15 +53,14 @@ Marketers who need one lead's story usually click through Marketo screen by scre
 
 ## Quickstart
 
-1. Build and install the snap. It needs `snapcraft` and LXD; see [SNAP_PACKAGING.md](./SNAP_PACKAGING.md). mkto isn't in the Snap Store yet, so the local build is installed with `--dangerous` (it isn't store-signed).
+1. Install the snap from the [Snap Store](https://snapcraft.io/mkto) (amd64 and arm64). It's on the `edge` channel while it's being tried out:
 
    ```bash
-   snapcraft pack
-   sudo snap install --dangerous ./mkto_*_amd64.snap
+   sudo snap install mkto --edge
    mkto version
    ```
 
-   From source instead (Go 1.27.3 or later): `make build` builds `./mkto` with the version and commit stamped in.
+   To build it yourself instead, see [SNAP_PACKAGING.md](./SNAP_PACKAGING.md) (`snapcraft pack`, then `sudo snap install --dangerous ./mkto_*_amd64.snap`). From source (Go 1.27.3 or later): `make build` builds `./mkto` with the version and commit stamped in.
 
 2. Create the config file, then edit it. It is written with mode 600, readable only by you.
 

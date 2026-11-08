@@ -2,7 +2,7 @@
 
 How to build, install, run and publish mkto as a strictly confined snap.
 
-> **Status (2026-11-08):** `snap/snapcraft.yaml` is at 0.2.0. `snapcraft pack` is verified for amd64 (LXD build, file layout checked with `unsquashfs`, and the binary run unconfined). **Draft:** the 0.2.0 install and confinement re-test ([below](#confinement-re-test-for-020-erekle)) and the first arm64 CI build have not run yet. The 0.1.0 confinement run is verified; see [Verified confinement run (0.1.0)](#verified-confinement-run-010-2026-11-08).
+> **Status (2026-11-09):** 0.2.0 is in the Snap Store on `latest/edge`: revision 1 (amd64) and revision 2 (arm64), both built by CI run 42527292021 from commit `fc59594`. Verified on amd64: the CI-built snap installed with `--dangerous` and then the store revision via `snap refresh --amend --edge`, `mkto doctor` all ✓, and `activity` and `why` against a real instance under strict confinement, with no AppArmor denials. Not yet verified: the arm64 snap on an arm64 machine. Not yet done: promotion to `beta` and `stable`.
 
 ## Prerequisites
 
@@ -211,6 +211,7 @@ So `--out ~/report.json` and `--out ~/Documents/report.json` work. `--out ~/.rep
 
 - Inside the snap, `HOME` is `$SNAP_USER_DATA` → `~/snap/mkto/<revision>/` (with a `current` symlink). snapd copies this directory on every refresh.
 - mkto keeps its config in `$SNAP_USER_COMMON` instead → **`~/snap/mkto/common/config.toml`**, so credentials exist once and survive refreshes and reverts.
+- **`snap remove` deletes the config.** Removing the snap deletes `~/snap/mkto/` including `common/config.toml`; only refreshes and reverts keep it. snapd saves an automatic snapshot on remove: `snap saved mkto` lists it, `sudo snap restore <set> mkto` brings the config back, and `sudo snap forget <set>` deletes the snapshot (it holds the client secret). To upgrade or switch to the store build, use `sudo snap install --dangerous <file>` over the old version or `sudo snap refresh mkto --amend`, never remove and reinstall (2026-11-09: a remove lost the config; the snapshot restored it).
 - `mkto brief` keeps its files in the same directory, and they need no new plugs: the LLM calls use the existing `network` plug.
   - `playbook.md`: your private offerings, never built into the snap.
   - `prompts/`: optional prompt overrides.
@@ -349,7 +350,7 @@ Claude never logs in, registers, uploads or releases. Run these yourself, from t
    ```
 4. **Try it from the store** on a clean machine, if you can, and repeat the [re-test](#confinement-re-test-for-020-erekle) against the store build:
    ```bash
-   sudo snap remove mkto && sudo snap install mkto --edge
+   sudo snap refresh mkto --amend --edge   # switch a local (--dangerous) install to the store build; keeps ~/snap/mkto/common
    ```
 5. **Promote edge → beta → stable.** `promote` moves the whole set of revisions in a channel, so both architectures move together. It asks for confirmation; `--yes` skips the prompt.
    ```bash
