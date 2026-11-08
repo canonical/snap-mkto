@@ -1,0 +1,6 @@
+✓ config: <config>
+✓ credentials: access token fetched
+✓ activity types: 10 types
+✓ lead fields: 14 fields
+✓ assets: programs readable
+✓ names: every configured field and activity type is on this instance

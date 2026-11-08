@@ -1,0 +1,7 @@
+Account 001EXAMPLE000001AAA · 4 leads · last 14 days · times in Asia/Tbilisi
+
+NAME         TITLE               SCORE  STATUS    OWNER              LAST TOUCH  14D
+Priya Shah   Head of Security    92     MQL       a.rep@example.com  2h ago      2 forms, 1 click
+Marco Rossi  IT Director         64     Nurture   a.rep@example.com  4d ago      2 opens
+Ana Lima     Facilities Manager  35     New       -                  9d ago      1 form
+Tom Becker   Network Engineer    18     Recycled  -                  11d ago     1 open

@@ -15,7 +15,7 @@ The project started as a snap-packaging assignment. The snap and its documentati
 | `docs/SPEC.md` | v1 commands, config, Marketo API usage, error handling, output. Source of truth for v1. |
 | `docs/LLM_LAYER.md` | Phase 2–3 design: redaction, narrative, verification, company research, pitch. **Do not start this until Phase 1.5 is done.** |
 | `docs/TASKS.md` | Phased checklist. Work top to bottom, one task at a time, and tick items off as you finish them. |
-| `docs/REPO.md` | GitHub repo settings, commit conventions, CI, Dependabot, releases. |
+| `docs/REPO.md` | GitHub repo settings, commit conventions, CI, Renovate, releases. |
 | `SNAP_PACKAGING.md` | Snap build/install/config guide. Keep it accurate whenever `snap/snapcraft.yaml` changes. |
 | `PLAYBOOK.example.md` | Shape of the user's private `playbook.md` (Phase 3). The real file is never committed. |
 

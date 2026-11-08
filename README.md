@@ -2,21 +2,31 @@
 
 Marketers who need one lead's story usually click through Marketo screen by screen: the profile, the activity log, each program the lead joined. `mkto` puts that on one terminal screen. Give it an email address and it shows the lead's profile, a timeline of recent activity and their program memberships, or explains how their score and status got where they are. It also looks up a list of leads or everyone at an account, lists programs, activity types and lead fields, and reports today's API usage. It is a small, read-only command-line client for the Marketo Engage REST API, packaged as a strictly confined Ubuntu snap.
 
-It enables marketing ops and growth teams to:
-
-- Look up: see a lead's profile fields by email, with duplicates flagged instead of hidden.
-- Trace: read a lead's activity as one chronological timeline, plus the programs they joined in the same window.
-- Explain: see the score and status changes behind an MQL or DQ, judged by your own scoring rule.
-- Scale: check a list of emails or a whole account in a few API calls.
-- Budget: check how much of the daily API quota is left before a big job.
-- Brief: optionally have Claude write a short lead brief from redacted data, with web research on the company and next steps from your own playbook.
-- Export: write results as JSON or CSV to a file only you can read.
-
 > **Read-only by design.** mkto only sends GET requests to Marketo, plus the identity call for a token. It never creates, updates or deletes anything. `mkto brief` is **off by default** and needs data-protection sign-off before use with real leads. Every example on this page and in the tests uses invented data.
 
 <p>
-<img src="./docs/assets/mkto_demo.gif" alt="Terminal demo: mkto quota, lead, activity and brief for an invented example.com lead" width="800">
+<img src="./docs/assets/mkto_demo.gif" alt="Terminal demo: mkto doctor, then mkto activity and mkto why for an invented example.com lead" width="900">
 </p>
+
+## What you can do
+
+| I want to… | Run | What I get |
+| --- | --- | --- |
+| Check my setup works | `mkto doctor` | A ✓ or ✗ for the config, the credentials and the API permissions, and whether every field and activity name in your config exists on your instance, with the key to fix |
+| Prepare for a call | `mkto activity <email>` | A call card (score, status, owner, last touch, 14-day counts), then the timeline: score changes `+25 (60→85) reason`, field changes `Nurture→MQL`, program statuses, bounces, clicked links, and the smart campaign behind each change |
+| Know why a lead MQL'd or got DQ'd | `mkto why <email>` | Every score and status change with its reason and campaign, where the score crossed your threshold, and what the lead did near or just before each one |
+| See a lead's profile | `mkto lead <email>` | Your `lead_fields` plus score, status, owner and CRM ids; duplicates shown side by side with only the differing fields |
+| Look a lead up by something other than email | `mkto lead 003… --by sfdcContactId` | The same, by any searchable field (`--by id`, `sfdcLeadId`, a custom field) |
+| Work my morning list | `mkto leads --from leads.csv --activity` | One row per email: score, status, owner, last update, last touch and window counts. 300 emails per lookup call; `--csv` for a spreadsheet |
+| See everyone at an account | `mkto account <sfdcAccountId>` | The account's leads, highest score first, with title, status, owner and last touch |
+| Know which lists a lead is on | `mkto lead <email> --lists` | The static lists the lead belongs to, newest first |
+| See which programs credit a lead | `mkto activity <email>` | The Programs section: status, `★ acquired`, `✓ success`, and the asset name and link from `{{my.Name}}` / `{{my.WPlink}}` |
+| Find the right field or activity name | `mkto fields --search score`, `mkto types --search bounce` | REST names and labels for your config, activity types with their attributes |
+| Find a program | `mkto programs --name webinar` | Programs matching a name, with type, channel and workspace |
+| Check the API budget | `mkto quota --by-user --errors` | Today's calls against your daily quota, per API user, plus today's error codes |
+| Get a written brief | `mkto brief <email>` | A cited narrative of the lead's activity, company research and next steps from your playbook. Off by default; only redacted data reaches Claude |
+| Export | add `--json`, `--csv` or `--out FILE` | Stable JSON, spreadsheet-safe CSV, or a file only you can read (mode 0600, never silently overwritten) |
+
 
 ## Key Features
 
@@ -133,6 +143,20 @@ Exit codes are the same for every command:
 
 Every data command takes `--json`, and `--verbose` shows request paths, timings and retries, never secrets or emails. `leads` and `account` also take `--csv`; cells that a spreadsheet would run as a formula get a leading `'`. Notes and warnings go to stderr. The full reference is [docs/SPEC.md](./docs/SPEC.md).
 
+### A list of leads, or a whole account
+
+`mkto leads` takes a CSV export or a plain list of emails (one per line, or `-` for stdin) and looks up 300 at a time. `--activity` adds last touch and window counts; `--csv` writes a spreadsheet-safe file.
+
+<p>
+<img src="./docs/assets/mkto_leads.gif" alt="Terminal demo: mkto leads --from leads.csv --activity for four invented example.com leads" width="760">
+</p>
+
+`mkto account` lists everyone at a Salesforce account, highest score first, so you can see who else is engaged before you call.
+
+<p>
+<img src="./docs/assets/mkto_account.gif" alt="Terminal demo: mkto account for an invented account with four leads" width="760">
+</p>
+
 ### mkto brief
 
 `mkto brief <email>` writes a short brief: a cited narrative of the lead's recent activity, web research on the company, and "How Canonical could help" from your own `playbook.md`.
@@ -206,7 +230,6 @@ Go dependencies are in `go.mod` and `go.sum`. The only Python is `tools/demo_gif
 | ---------- | -------------------------- | ---------------------------------------------------------------------------- |
 | CI         | `.github/workflows/ci.yml` | Every push and pull request: `test` (tidy, vet, gofmt, race tests), then `snap` (builds amd64 and arm64 snaps, uploaded as the `mkto-snap-amd64` and `mkto-snap-arm64` artifacts) |
 | Renovate   | `renovate.json`            | Dependency update PRs for Go modules and GitHub Actions                      |
-| Dependabot | `.github/dependabot.yml`   | Weekly Go module and monthly GitHub Actions update PRs                      |
 
 Every action in CI is pinned to a commit SHA.
 

@@ -17,6 +17,6 @@ lint:
 snap:
 	snapcraft pack
 
-# Re-render docs/assets/mkto_demo.gif from testdata/golden (needs uv; Pillow is pinned in tools/demo_gif.py.lock).
+# Re-render the README GIFs in docs/assets/ from testdata/golden/demo_*.txt (needs uv; Pillow is pinned in tools/demo_gif.py.lock).
 gif:
 	uv run tools/demo_gif.py
