@@ -166,7 +166,7 @@ func TestRedactMarkerIsNotAName(t *testing.T) {
 		t.Errorf("got %q %v", got, kinds)
 	}
 	l["email"] = "redacted@example.com"
-	p, err := Build(l, []marketo.Activity{act(1, 10, at(1, 9, 0), "Call 555-010-0199", nil)}, types)
+	p, err := Build(l, []marketo.Activity{act(1, 10, at(1, 9, 0), "Call 555-010-0199", nil)}, types, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,100 @@
+[
+  {
+    "name": "behaviorScore__c",
+    "label": "Behavior Score",
+    "type": "integer",
+    "length": 0,
+    "readOnly": false
+  },
+  {
+    "name": "company",
+    "label": "Company Name",
+    "type": "string",
+    "length": 255,
+    "readOnly": false
+  },
+  {
+    "name": "email",
+    "label": "Email Address",
+    "type": "email",
+    "length": 255,
+    "readOnly": false
+  },
+  {
+    "name": "emailInvalid",
+    "label": "Email Invalid",
+    "type": "boolean",
+    "length": 0,
+    "readOnly": true
+  },
+  {
+    "name": "firstName",
+    "label": "First Name",
+    "type": "string",
+    "length": 255,
+    "readOnly": false
+  },
+  {
+    "name": "lastName",
+    "label": "Last Name",
+    "type": "string",
+    "length": 255,
+    "readOnly": false
+  },
+  {
+    "name": "leadOwnerEmailAddress",
+    "label": "Lead Owner Email Address",
+    "type": "email",
+    "length": 255,
+    "readOnly": true
+  },
+  {
+    "name": "leadScore",
+    "label": "Lead Score",
+    "type": "integer",
+    "length": 0,
+    "readOnly": false
+  },
+  {
+    "name": "leadStatus",
+    "label": "Lead Status",
+    "type": "string",
+    "length": 255,
+    "readOnly": false
+  },
+  {
+    "name": "sfdcAccountId",
+    "label": "SFDC Account ID",
+    "type": "string",
+    "length": 18,
+    "readOnly": true
+  },
+  {
+    "name": "sfdcContactId",
+    "label": "SFDC Contact ID",
+    "type": "string",
+    "length": 18,
+    "readOnly": true
+  },
+  {
+    "name": "sfdcLeadId",
+    "label": "SFDC Lead ID",
+    "type": "string",
+    "length": 18,
+    "readOnly": true
+  },
+  {
+    "name": "sfdcLeadOwnerId",
+    "label": "SFDC Lead Owner Id",
+    "type": "string",
+    "length": 50,
+    "readOnly": true
+  },
+  {
+    "name": "unsubscribed",
+    "label": "Unsubscribed",
+    "type": "boolean",
+    "length": 0,
+    "readOnly": false
+  }
+]

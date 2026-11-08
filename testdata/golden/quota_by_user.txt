@@ -1,0 +1,16 @@
+Today (2026-11-08, US Central): 530 of 50000 calls used (1.1%), 49470 remaining
+The daily limit comes from daily_quota in <config>; Marketo doesn't report it.
+
+API USER              CALLS
+api-user@example.com  500
+ops-user@example.com  30
+
+Last 7 days
+DATE        CALLS
+2026-11-01  100
+2026-11-02  200
+2026-11-03  300
+2026-11-04  400
+2026-11-05  500
+2026-11-06  600
+2026-11-07  700

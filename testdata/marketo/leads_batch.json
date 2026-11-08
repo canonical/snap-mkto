@@ -1,0 +1,9 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "result": [
+    {"id": 1001, "email": "jane.doe@example.com", "firstName": "Jane", "lastName": "Doe"},
+    {"id": 1002, "email": "john.roe@example.com", "firstName": "John", "lastName": "Roe"},
+    {"id": 1003, "email": "sam.poe@example.com", "firstName": "Sam", "lastName": "Poe"}
+  ]
+}

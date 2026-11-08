@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +28,9 @@ type Config struct {
 	Marketo Marketo
 	Output  Output
 	LLM     LLM
+	Why     Why
+	// FromEnv: the environment variables that overrode a config key, e.g. "MKTO_CLIENT_SECRET".
+	FromEnv map[string]bool `toml:"-"`
 }
 
 type Marketo struct {
@@ -35,10 +40,61 @@ type Marketo struct {
 	DailyQuota    int      `toml:"daily_quota"`
 	LeadFields    []string `toml:"lead_fields"`
 	ActivityTypes []string `toml:"activity_types"`
+	// ProfileFields: extra lead fields `lead` (and the activity card) show; absent means
+	// DefaultProfileFields, an explicit [] means none. Missing ones are skipped, not fatal.
+	ProfileFields []string `toml:"profile_fields"`
+	// ChangeFields: the Change Data Value fields the text timeline shows; absent means
+	// DefaultChangeFields, an explicit [] shows every field.
+	ChangeFields []string `toml:"change_fields"`
+	// NameTokens and LinkTokens: program tokens `activity` shows as the program's title and
+	// link, first match wins; absent means my.Name / my.WPlink, an explicit [] means none.
+	NameTokens []string `toml:"name_tokens"`
+	LinkTokens []string `toml:"link_tokens"`
+	// ActivityTypesDefaulted: activity_types is absent or an unedited v0.1.0 list, so
+	// DefaultActivityTypes is in use and its names (some unverified) may be missing.
+	ActivityTypesDefaulted bool `toml:"-"`
+	// ActivityTypesMigrated: activity_types was an unedited v0.1.0 list.
+	ActivityTypesMigrated bool `toml:"-"`
+}
+
+// DefaultActivityTypes tell a lead's story: exactly 10, one activities batch.
+var DefaultActivityTypes = []string{"Fill Out Form", "Open Email", "Click Email", "Email Bounced", "Email Bounced Soft",
+	"Unsubscribe Email", "Change Score", "Change Data Value", "Change Status in Progression", "New Lead"}
+
+var DefaultLeadFields = []string{"id", "email", "firstName", "lastName", "title", "company",
+	"industry", "country", "leadSource", "createdAt", "updatedAt"}
+
+// DefaultProfileFields: score, status, owner and CRM sync. Names other than unsubscribed
+// are unverified (testdata/marketo/README.md); each one an instance lacks costs a retry.
+var DefaultProfileFields = []string{"leadScore", "leadStatus", "sfdcLeadOwnerId", "unsubscribed", "emailInvalid",
+	"sfdcLeadId", "sfdcContactId", "sfdcAccountId"}
+
+// DefaultChangeFields are the field labels whose Change Data Value rows the text timeline shows.
+var DefaultChangeFields = []string{"Lead Status", "Lead Score", "Company Name"}
+
+// legacyActivityTypes are the v0.1.0 template lists; a config still holding one is migrated.
+var legacyActivityTypes = [][]string{
+	{"Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered", "Open Email", "Click Email",
+		"Unsubscribe Email", "Change Status in Progression", "New Lead"},
+	{"Visit Webpage", "Fill Out Form", "Click Link", "Email Delivered", "Open Email", "Click Email",
+		"Unsubscribe Email", "Change Status in Progression", "Interesting Moment", "New Lead"},
 }
 
 type Output struct {
 	Timezone string `toml:"timezone"`
+	LeadURL  string `toml:"lead_url"` // a lead's Marketo page, with {id} where the lead id goes
+}
+
+// Why is the scoring rule `mkto why` explains, owned by Marketing. ScoreField and
+// StatusField are field labels (as `mkto fields` shows them), since Change Score and
+// Change Data Value rows name the field by label. The why command validates it.
+type Why struct {
+	ScoreField   string   `toml:"score_field"`
+	MQLThreshold int      `toml:"mql_threshold"`
+	StatusField  string   `toml:"status_field"`
+	MQLValues    []string `toml:"mql_values"`
+	DQValues     []string `toml:"dq_values"`
+	NearHours    int      `toml:"near_hours"`
 }
 
 type LLM struct {
@@ -79,14 +135,22 @@ func Load(path string, getenv func(string) string, warn io.Writer) (*Config, err
 	}
 	var c Config
 	if err := toml.Unmarshal(b, &c); err != nil {
-		return nil, fmt.Errorf("config %s is not valid TOML: %w", path, err)
+		if de, ok := errors.AsType[*toml.DecodeError](err); ok && slices.Equal(de.Key(), toml.Key{"marketo", "daily_quota"}) {
+			return nil, fmt.Errorf("config key marketo.daily_quota in %s must be a whole number, e.g. 50000", path)
+		}
+		if key := secretLine(b, err); key != "" { // go-toml quotes the offending character: keep secrets out
+			return nil, fmt.Errorf("config key %s in %s is not a valid TOML string (put the value in double quotes)", key, path)
+		}
+		// go-toml quotes the offending character (U+005A 'Z'): drop it, it may belong to a secret.
+		return nil, fmt.Errorf("config %s is not valid TOML: %s", path, quotedChar.ReplaceAllString(err.Error(), "a character"))
 	}
+	c.FromEnv = map[string]bool{}
 	for k, dst := range map[string]*string{
 		"MKTO_BASE_URL": &c.Marketo.BaseURL, "MKTO_CLIENT_ID": &c.Marketo.ClientID, "MKTO_CLIENT_SECRET": &c.Marketo.ClientSecret,
 		"MKTO_LLM_API_KEY": &c.LLM.APIKey,
 	} {
 		if v := getenv(k); v != "" {
-			*dst = v
+			*dst, c.FromEnv[k] = v, true
 		}
 	}
 	if err := c.defaultsAndValidate(path); err != nil {
@@ -97,6 +161,18 @@ func Load(path string, getenv func(string) string, warn io.Writer) (*Config, err
 
 func (c *Config) defaultsAndValidate(path string) error {
 	m := &c.Marketo
+	var errs []error
+	if strings.TrimSpace(m.BaseURL) != "" {
+		base, err := normaliseBaseURL(m.BaseURL)
+		switch {
+		case err != nil:
+			errs = append(errs, fmt.Errorf("config key marketo.base_url in %s: %w", path, err))
+		case strings.EqualFold(base, "https://123-ABC-456.mktorest.com"): // the template's value
+			errs = append(errs, fmt.Errorf("config key marketo.base_url in %s is still the template placeholder: set your REST endpoint from Admin > Web Services", path))
+		default:
+			m.BaseURL = base
+		}
+	}
 	for _, k := range []struct {
 		key string
 		val *string
@@ -104,15 +180,13 @@ func (c *Config) defaultsAndValidate(path string) error {
 		{"base_url", &m.BaseURL}, {"client_id", &m.ClientID}, {"client_secret", &m.ClientSecret},
 	} {
 		if strings.TrimSpace(*k.val) == "" {
-			return fmt.Errorf("config key marketo.%s is not set: edit %s (or set the MKTO_%s environment variable)",
-				k.key, path, strings.ToUpper(k.key))
+			errs = append(errs, fmt.Errorf("config key marketo.%s is not set: edit %s (or set the MKTO_%s environment variable)",
+				k.key, path, strings.ToUpper(k.key)))
 		}
 	}
-	base, err := normaliseBaseURL(m.BaseURL)
-	if err != nil {
-		return fmt.Errorf("config key marketo.base_url in %s: %w", path, err)
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
-	m.BaseURL = base
 
 	var d Config
 	if err := toml.Unmarshal(template, &d); err != nil {
@@ -122,13 +196,31 @@ func (c *Config) defaultsAndValidate(path string) error {
 		m.DailyQuota = d.Marketo.DailyQuota
 	}
 	if len(m.LeadFields) == 0 {
-		m.LeadFields = d.Marketo.LeadFields
+		m.LeadFields = DefaultLeadFields
 	}
-	if len(m.ActivityTypes) == 0 {
-		m.ActivityTypes = d.Marketo.ActivityTypes
+	if m.ProfileFields == nil { // go-toml leaves an absent key nil and makes [] empty
+		m.ProfileFields = DefaultProfileFields
+	}
+	if m.ChangeFields == nil {
+		m.ChangeFields = DefaultChangeFields
+	}
+	if m.NameTokens == nil {
+		m.NameTokens = []string{"my.Name"}
+	}
+	if m.LinkTokens == nil {
+		m.LinkTokens = []string{"my.WPlink"}
+	}
+	m.ActivityTypesMigrated = slices.ContainsFunc(legacyActivityTypes, func(l []string) bool {
+		return slices.EqualFunc(m.ActivityTypes, l, func(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), b) })
+	})
+	if len(m.ActivityTypes) == 0 || m.ActivityTypesMigrated {
+		m.ActivityTypes, m.ActivityTypesDefaulted = DefaultActivityTypes, true
 	}
 	if c.LLM.Model == "" {
 		c.LLM.Model = d.LLM.Model
+	}
+	if c.Why.NearHours == 0 {
+		c.Why.NearHours = 2
 	}
 	if c.Output.Timezone == "" {
 		c.Output.Timezone = "Local"
@@ -139,7 +231,7 @@ func (c *Config) defaultsAndValidate(path string) error {
 	return nil
 }
 
-// normaliseBaseURL returns scheme://host: no trailing slash and no /rest suffix.
+// normaliseBaseURL returns scheme://host: no trailing slash and no /rest or /rest/v1 suffix.
 func normaliseBaseURL(s string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(s))
 	if err != nil || u.Host == "" {
@@ -148,8 +240,8 @@ func normaliseBaseURL(s string) (string, error) {
 	if u.Scheme != "https" {
 		return "", errors.New("must start with https:// (Marketo does not accept plain http)")
 	}
-	if p := strings.Trim(u.Path, "/"); p != "" && p != "rest" {
-		return "", errors.New("must be the bare host, optionally followed by /rest")
+	if p := strings.Trim(u.Path, "/"); p != "" && p != "rest" && p != "rest/v1" {
+		return "", errors.New("must be the bare host, optionally followed by /rest or /rest/v1")
 	}
 	return "https://" + u.Host, nil
 }
@@ -171,6 +263,9 @@ func WriteTemplate(path string, force bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&fs.ModeSymlink != 0 { // --force must not write (and chmod) through it
+		return fmt.Errorf("%s is a symlink; mkto won't write through it: remove it or pass --config with another path", path)
+	}
 	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	if force {
 		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
@@ -191,3 +286,27 @@ func WriteTemplate(path string, force bool) error {
 	}
 	return f.Close()
 }
+
+// secretLine names the secret key on the line a TOML error points at, or "" when the
+// error is elsewhere.
+func secretLine(b []byte, err error) string {
+	de, ok := errors.AsType[*toml.DecodeError](err)
+	if !ok {
+		return ""
+	}
+	row, _ := de.Position()
+	lines := strings.Split(string(b), "\n")
+	if row < 1 || row > len(lines) {
+		return ""
+	}
+	key, _, _ := strings.Cut(lines[row-1], "=")
+	switch strings.Trim(strings.TrimSpace(key), `"'`) { // a quoted key is the same key
+	case "client_secret":
+		return "marketo.client_secret"
+	case "api_key":
+		return "llm.api_key"
+	}
+	return ""
+}
+
+var quotedChar = regexp.MustCompile(`U\+[0-9A-Fa-f]{4,6} '[^']*'`)

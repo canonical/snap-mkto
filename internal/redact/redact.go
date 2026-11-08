@@ -10,14 +10,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/canonical/snap-mkto/internal/marketo"
+	"github.com/canonical/snap-mkto/internal/output"
 )
 
 // Event is one redacted activity.
@@ -27,6 +30,14 @@ type Event struct {
 	Type  string    `json:"type,omitempty"`
 	Asset string    `json:"asset,omitempty"`
 	URL   string    `json:"url,omitempty"`
+	// Change is a score's "+25 (60→85)", the status field's "old→new" or a program's
+	// "→ new status"; never a Reason or any other attribute (D2).
+	Change string `json:"change,omitempty"`
+}
+
+// Options are the config values Build needs.
+type Options struct {
+	StatusField string // [why] status_field: the only Change Data Value field sent
 }
 
 type profile struct {
@@ -53,10 +64,12 @@ type CompanyQuery struct {
 	company, industry, country string
 }
 
-// Activity types whose primary value is an asset name (email, form, program).
+// Activity types whose primary value is an asset name (email, form, program) or,
+// for score and data value changes, the changed field's label.
 var assetTypes = map[string]bool{
-	"open email": true, "click email": true, "email delivered": true, "unsubscribe email": true,
+	"open email": true, "click email": true, "unsubscribe email": true,
 	"fill out form": true, "change status in progression": true, "new lead": true,
+	"change score": true, "change data value": true,
 }
 
 // Activity types whose primary value is a URL.
@@ -65,8 +78,9 @@ var urlTypes = map[string]bool{"visit webpage": true, "click link": true}
 // Build redacts a lead and its activities. types maps activity type id to name.
 // Personal data left in a value (an email, phone, IP or the lead's name) is
 // replaced in place with {redacted}; Build fails only if the guard still finds
-// some after that.
-func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string) (Payload, error) {
+// some after that. Email Delivered rows, and Change Data Value rows for any field but
+// opts.StatusField, are dropped.
+func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string, opts Options) (Payload, error) {
 	p := Payload{lead: profile{
 		Company:  field(l, "company"),
 		Industry: field(l, "industry"),
@@ -84,13 +98,33 @@ func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string) (Paylo
 		}
 		return sorted[i].ID < sorted[j].ID
 	})
-	for i, a := range sorted {
+	status := strings.TrimSpace(opts.StatusField)
+	if PersonalLabel(status) { // fail closed: a mis-set status_field must not send personal data
+		status = ""
+	}
+	for _, a := range sorted {
 		name, ok := types[a.TypeID]
 		if !ok {
 			name = fmt.Sprintf("activity type %d", a.TypeID)
 		}
-		e := Event{ID: fmt.Sprintf("E%d", i+1), Date: a.Date.UTC().Truncate(time.Hour), Type: name}
-		switch kind := strings.ToLower(strings.TrimSpace(name)); {
+		kind := strings.ToLower(strings.TrimSpace(name))
+		if kind == "email delivered" || (kind == "change data value" && (status == "" || !strings.EqualFold(strings.TrimSpace(a.Primary), status))) {
+			continue
+		}
+		e := Event{ID: fmt.Sprintf("E%d", len(p.events)+1), Date: a.Date.UTC().Truncate(time.Hour), Type: name}
+		switch kind {
+		case "change score":
+			e.Change = scoreChange(a)
+		case "change data value":
+			if o, n := attr(a, "Old Value"), attr(a, "New Value"); o != "" || n != "" {
+				e.Change = o + "→" + n
+			}
+		case "change status in progression":
+			if s := attr(a, "New Status"); s != "" {
+				e.Change = "→ " + s
+			}
+		}
+		switch {
 		case assetTypes[kind]:
 			e.Asset = strings.TrimSpace(a.Primary)
 		case urlTypes[kind]:
@@ -109,6 +143,9 @@ func Build(l marketo.Lead, acts []marketo.Activity, types map[int]string) (Paylo
 		if !slices.Contains(p.redactions, r) {
 			p.redactions = append(p.redactions, r)
 		}
+	}
+	for _, lf := range p.leaves() { // control, C1 and bidi characters could disguise the --show-payload review
+		*lf.s = output.Clean(*lf.s)
 	}
 	for pass := range 3 { // one pass should do; more cover a replacement that exposes a new hit
 		for _, lf := range p.leaves() {
@@ -139,7 +176,7 @@ func (p *Payload) leaves() []leaf {
 		{"lead.country", &p.lead.Country}, {"lead.role", &p.lead.Role}}
 	for i := range p.events {
 		e, pre := &p.events[i], fmt.Sprintf("events[%d].", i)
-		ls = append(ls, leaf{pre + "id", &e.ID}, leaf{pre + "type", &e.Type}, leaf{pre + "asset", &e.Asset}, leaf{pre + "url", &e.URL})
+		ls = append(ls, leaf{pre + "id", &e.ID}, leaf{pre + "type", &e.Type}, leaf{pre + "asset", &e.Asset}, leaf{pre + "url", &e.URL}, leaf{pre + "change", &e.Change})
 	}
 	return ls
 }
@@ -186,7 +223,58 @@ func marshal(v any) []byte {
 	return bytes.TrimSuffix(b.Bytes(), []byte("\n"))
 }
 
+// attr reads a string or number attribute; the names Build reads are those of
+// internal/story (UNVERIFIED on a real instance).
+func attr(a marketo.Activity, key string) string {
+	switch v := a.Attributes[key].(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	return ""
+}
+
+// scoreChange is "+25 (60→85)": each part only when its values are numbers, re-formatted
+// from the parsed number so no text rides along.
+func scoreChange(a marketo.Activity) string {
+	num := func(key string) (float64, bool) {
+		f, err := strconv.ParseFloat(attr(a, key), 64)
+		return f, err == nil && !math.IsNaN(f) && !math.IsInf(f, 0)
+	}
+	format := func(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
+	o, okO := num("Old Value")
+	n, okN := num("New Value")
+	d, okD := num("Change Value")
+	if !okD && okO && okN {
+		d, okD = math.Round((n-o)*1e6)/1e6, true // 85.1-60 is 25.099999999999994
+	}
+	var parts []string
+	if okD {
+		parts = append(parts, map[bool]string{true: "+"}[d > 0]+format(d))
+	}
+	if okO && okN {
+		parts = append(parts, "("+format(o)+"→"+format(n)+")")
+	}
+	return strings.Join(parts, " ")
+}
+
 func field(l marketo.Lead, key string) string {
 	s, _ := l[key].(string)
 	return strings.TrimSpace(s)
+}
+
+// personalWords mark field labels that hold personal data; a status_field that names one
+// is ignored, so its changes never reach the LLM.
+var personalWords = []string{"email", "e-mail", "phone", "mobile", "fax", "name", "address", "street", "city",
+	"postal", "zip", "ip", "birth", "linkedin", "twitter", "facebook", "social"}
+
+// PersonalLabel reports whether a field label looks like personal data (word match, any case).
+func PersonalLabel(label string) bool {
+	for _, w := range strings.FieldsFunc(strings.ToLower(label), func(r rune) bool { return !unicode.IsLetter(r) && r != '-' }) {
+		if slices.Contains(personalWords, w) {
+			return true
+		}
+	}
+	return false
 }

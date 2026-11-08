@@ -1,0 +1,15 @@
+NAME                   LABEL                     TYPE     LENGTH  READ-ONLY
+behaviorScore__c       Behavior Score            integer  -       -
+company                Company Name              string   255     -
+email                  Email Address             email    255     -
+emailInvalid           Email Invalid             boolean  -       yes
+firstName              First Name                string   255     -
+lastName               Last Name                 string   255     -
+leadOwnerEmailAddress  Lead Owner Email Address  email    255     yes
+leadScore              Lead Score                integer  -       -
+leadStatus             Lead Status               string   255     -
+sfdcAccountId          SFDC Account ID           string   18      yes
+sfdcContactId          SFDC Contact ID           string   18      yes
+sfdcLeadId             SFDC Lead ID              string   18      yes
+sfdcLeadOwnerId        SFDC Lead Owner Id        string   50      yes
+unsubscribed           Unsubscribed              boolean  -       -

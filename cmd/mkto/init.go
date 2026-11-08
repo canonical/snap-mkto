@@ -31,7 +31,7 @@ Next steps:
   1. Edit the file and set base_url, client_id and client_secret
      (Marketo Admin > Web Services; credentials under Admin > LaunchPoint).
   2. Set daily_quota to your subscription's daily API limit.
-  3. Run: mkto quota
+  3. Run: mkto doctor   (checks credentials, permissions and the names in this file)
 `, path)
 			return nil
 		},

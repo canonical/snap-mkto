@@ -1,0 +1,220 @@
+{
+  "lead": {
+    "id": 1001,
+    "fields": {
+      "createdAt": "2025-01-10T09:00:00Z",
+      "email": "jane.doe@example.com",
+      "emailInvalid": false,
+      "firstName": "Jane",
+      "id": 1001,
+      "lastName": "Doe",
+      "leadScore": 85,
+      "leadStatus": "MQL",
+      "sfdcAccountId": "",
+      "sfdcLeadId": "00Q000000000001AAA",
+      "unsubscribed": false,
+      "updatedAt": "2026-10-01T12:00:00Z"
+    }
+  },
+  "rule": {
+    "scoreField": "Behavior Score",
+    "threshold": 80,
+    "statusField": "Lead Status",
+    "mqlValues": [
+      "MQL"
+    ],
+    "dqValues": [
+      "Disqualified",
+      "Recycled"
+    ],
+    "nearHours": 2
+  },
+  "steps": [
+    {
+      "date": "2026-10-05T09:00:00Z",
+      "kind": "status",
+      "field": "Lead Status",
+      "old": "Nurture",
+      "new": "MQL",
+      "reason": "Changed by smart campaign Score Threshold",
+      "campaignId": 3001,
+      "campaign": "Score Threshold",
+      "activityId": 6002
+    },
+    {
+      "date": "2026-10-10T10:00:05Z",
+      "kind": "score",
+      "field": "Behavior Score",
+      "old": "60",
+      "new": "85",
+      "delta": 25,
+      "reason": "Filled out form",
+      "campaignId": 3002,
+      "campaign": "Behavior Scoring",
+      "activityId": 6004
+    },
+    {
+      "date": "2026-10-18T09:00:00Z",
+      "kind": "score",
+      "field": "Behavior Score",
+      "old": "85",
+      "new": "75",
+      "delta": -10,
+      "reason": "Email bounced",
+      "campaignId": 3002,
+      "campaign": "Behavior Scoring",
+      "activityId": 6011
+    },
+    {
+      "date": "2026-10-20T09:00:00Z",
+      "kind": "status",
+      "field": "Lead Status",
+      "old": "MQL",
+      "new": "Disqualified",
+      "reason": "Changed by smart campaign Disqualify Bounced",
+      "campaignId": 3004,
+      "campaign": "Disqualify Bounced",
+      "activityId": 6012
+    }
+  ],
+  "marks": [
+    {
+      "label": "MQL",
+      "step": {
+        "date": "2026-10-05T09:00:00Z",
+        "kind": "status",
+        "field": "Lead Status",
+        "old": "Nurture",
+        "new": "MQL",
+        "reason": "Changed by smart campaign Score Threshold",
+        "campaignId": 3001,
+        "campaign": "Score Threshold",
+        "activityId": 6002
+      },
+      "near": [],
+      "before": [
+        {
+          "id": 6001,
+          "date": "2026-10-01T08:00:00Z",
+          "type": "New Lead",
+          "primary": "2026-10-01",
+          "primaryId": 1001,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "label": "crossed 80",
+      "step": {
+        "date": "2026-10-10T10:00:05Z",
+        "kind": "score",
+        "field": "Behavior Score",
+        "old": "60",
+        "new": "85",
+        "delta": 25,
+        "reason": "Filled out form",
+        "campaignId": 3002,
+        "campaign": "Behavior Scoring",
+        "activityId": 6004
+      },
+      "near": [
+        {
+          "id": 6003,
+          "date": "2026-10-10T10:00:00Z",
+          "type": "Fill Out Form",
+          "primary": "Contact Us Form",
+          "primaryId": 12,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "label": "dropped below 80",
+      "step": {
+        "date": "2026-10-18T09:00:00Z",
+        "kind": "score",
+        "field": "Behavior Score",
+        "old": "85",
+        "new": "75",
+        "delta": -10,
+        "reason": "Email bounced",
+        "campaignId": 3002,
+        "campaign": "Behavior Scoring",
+        "activityId": 6011
+      },
+      "near": [],
+      "before": [
+        {
+          "id": 6010,
+          "date": "2026-10-17T09:00:00Z",
+          "type": "Unsubscribe Email",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "attributes": {}
+        },
+        {
+          "id": 6009,
+          "date": "2026-10-16T09:00:00Z",
+          "type": "Email Bounced Soft",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "detail": "softbounce: 452 4.2.2 mailbox full",
+          "attributes": {}
+        },
+        {
+          "id": 6008,
+          "date": "2026-10-15T09:00:00Z",
+          "type": "Email Bounced",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "detail": "hardbounce: 550 5.1.1 mailbox unknown",
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "label": "DQ",
+      "step": {
+        "date": "2026-10-20T09:00:00Z",
+        "kind": "status",
+        "field": "Lead Status",
+        "old": "MQL",
+        "new": "Disqualified",
+        "reason": "Changed by smart campaign Disqualify Bounced",
+        "campaignId": 3004,
+        "campaign": "Disqualify Bounced",
+        "activityId": 6012
+      },
+      "near": [],
+      "before": [
+        {
+          "id": 6010,
+          "date": "2026-10-17T09:00:00Z",
+          "type": "Unsubscribe Email",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "attributes": {}
+        },
+        {
+          "id": 6009,
+          "date": "2026-10-16T09:00:00Z",
+          "type": "Email Bounced Soft",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "detail": "softbounce: 452 4.2.2 mailbox full",
+          "attributes": {}
+        },
+        {
+          "id": 6008,
+          "date": "2026-10-15T09:00:00Z",
+          "type": "Email Bounced",
+          "primary": "Example Newsletter",
+          "primaryId": 802,
+          "detail": "hardbounce: 550 5.1.1 mailbox unknown",
+          "attributes": {}
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

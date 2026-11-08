@@ -29,7 +29,7 @@ import (
 
 func newBriefCmd(env Env) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "brief <email>",
+		Use:   "brief <email|value>",
 		Short: "LLM-written lead brief (--show-payload previews what would be sent)",
 		Long: "Write a short brief about a lead from a redacted activity timeline.\n\n" +
 			"--show-payload prints exactly what would be sent to the LLM and sends nothing. It works with [llm] enabled = false and needs no API key.\n\n" +
@@ -43,7 +43,8 @@ func newBriefCmd(env Env) *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.Int("days", 90, "window size in days (at least 1)")
-	f.Int("lead-id", 0, "pick this lead when several share the email")
+	f.Int("lead-id", 0, "pick this lead when several match")
+	f.String("by", "email", byHelp)
 	f.Bool("show-payload", false, "print what would be sent to the LLM and send nothing")
 	f.Bool("no-research", false, "skip the company research step")
 	f.Bool("save", false, "also write the brief to briefs/ in the config directory (mode 0600)")
@@ -51,11 +52,15 @@ func newBriefCmd(env Env) *cobra.Command {
 	return cmd
 }
 
-func runBrief(cmd *cobra.Command, env Env, email string) error {
+func runBrief(cmd *cobra.Command, env Env, value string) error {
 	f := cmd.Flags()
+	by, _ := f.GetString("by")
 	days, _ := f.GetInt("days")
 	leadID, _ := f.GetInt("lead-id")
 	show, _ := f.GetBool("show-payload")
+	if err := checkKey(by, value); err != nil {
+		return err
+	}
 	if days < 1 {
 		return exitError{2, errors.New("--days must be at least 1")}
 	}
@@ -70,7 +75,9 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 	var prov llm.Provider
 	if !show {
 		if !cfg.LLM.Enabled {
-			return fmt.Errorf("mkto brief is off. Read the sign-off section in docs/LLM_LAYER.md, then set [llm] enabled = true in %s.", cfgPath)
+			return fmt.Errorf("mkto brief is off. To turn it on, set [llm] enabled = true and api_key (or MKTO_LLM_API_KEY) in %s. "+
+				"Preview what would be sent first: mkto brief <email> --show-payload. "+
+				"Data-protection sign-off: https://github.com/canonical/snap-mkto/blob/main/docs/LLM_LAYER.md", cfgPath)
 		}
 		if cfg.LLM.APIKey == "" {
 			return fmt.Errorf("llm.api_key is not set (or set MKTO_LLM_API_KEY) in %s", cfgPath)
@@ -93,12 +100,12 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 	}
 
 	ctx := cmd.Context()
-	leads, err := leadsByEmail(ctx, cmd, env, client, cfg, email,
+	leads, err := leadsBy(ctx, cmd, env, client, cfg, by, value,
 		[]string{"id", "updatedAt", "firstName", "lastName", "email", "title", "company", "industry", "country", "numberOfEmployees"})
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
-	lead, notes, err := pickLead(leads, leadID, email)
+	lead, notes, err := pickLead(leads, leadID, by, value)
 	if err != nil {
 		return err
 	}
@@ -109,23 +116,22 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 	if err != nil {
 		return mapErr(err, cfg, cfgPath)
 	}
-	names := cfg.Marketo.ActivityTypes
-	if web, _ := f.GetBool("web"); !web {
-		names = slices.DeleteFunc(slices.Clone(names), func(n string) bool {
-			n = strings.ToLower(strings.TrimSpace(n))
-			return n == "visit webpage" || n == "click link"
-		})
-		if len(names) == 0 && len(cfg.Marketo.ActivityTypes) > 0 {
-			return errors.New("no activity types left to fetch: activity_types only has web types; add --web to include them")
-		}
-		if len(names) < len(cfg.Marketo.ActivityTypes) {
-			fmt.Fprintln(env.Stderr, "note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them")
-		}
+	web, _ := f.GetBool("web")
+	names, note, err := dropWebTypes(cfg.Marketo.ActivityTypes, web)
+	if err != nil {
+		return err
+	}
+	if note != "" {
+		fmt.Fprintln(env.Stderr, note)
 	}
 	typeIDs, unknown := marketo.ResolveTypes(all, names)
-	for _, n := range unknown {
-		fmt.Fprintf(env.Stderr, "warning: unknown activity type %q skipped; check activity_types in %s\n", output.Clean(strings.TrimSpace(n)), cfgPath)
-	}
+	warnUnknownTypes(cmd, env, cfg, cfgPath, unknown, func(n string) {
+		if s := closestType(all, n); s != "" {
+			fmt.Fprintf(env.Stderr, "warning: unknown activity type %q skipped; did you mean %q? (check activity_types in %s; see mkto types)\n", output.Clean(n), output.Clean(s), cfgPath)
+			return
+		}
+		fmt.Fprintf(env.Stderr, "warning: unknown activity type %q skipped; check activity_types in %s\n", output.Clean(n), cfgPath)
+	})
 	if len(typeIDs) == 0 {
 		return fmt.Errorf("no known activity types to fetch; check activity_types in %s", cfgPath)
 	}
@@ -138,7 +144,10 @@ func runBrief(cmd *cobra.Command, env Env, email string) error {
 		return mapErr(err, cfg, cfgPath)
 	}
 
-	p, err := redact.Build(lead, acts, typeName)
+	if sf := cfg.Why.StatusField; sf != "" && redact.PersonalLabel(sf) {
+		fmt.Fprintf(env.Stderr, "note: [why] status_field %q looks like personal data, so its changes are not sent to the LLM\n", output.Clean(sf))
+	}
+	p, err := redact.Build(lead, acts, typeName, redact.Options{StatusField: cfg.Why.StatusField})
 	if err != nil {
 		return err // names the field, never the value
 	}
@@ -363,7 +372,7 @@ func writeBrief(cmd *cobra.Command, env Env, prov llm.Provider, p redact.Payload
 	b.WriteString("\n## Events\n")
 	rows := make([][]string, len(events))
 	for i, e := range events {
-		rows[i] = []string{e.ID, e.Date.Format("2006-01-02 15:04 UTC"), e.Type, cmp.Or(e.Asset, e.URL)}
+		rows[i] = []string{e.ID, e.Date.Format("2006-01-02 15:04 UTC"), e.Type, strings.TrimSpace(cmp.Or(e.Asset, e.URL) + " " + e.Change)}
 	}
 	var tbl bytes.Buffer
 	if err := output.Table(&tbl, rows); err != nil {

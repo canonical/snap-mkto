@@ -24,7 +24,7 @@ func TestInitModes(t *testing.T) {
 	if di.Mode().Perm() != 0o700 || fi.Mode().Perm() != 0o600 {
 		t.Errorf("modes dir %v file %v", di.Mode().Perm(), fi.Mode().Perm())
 	}
-	for _, want := range []string{p, "client_secret", "daily_quota", "mkto quota"} {
+	for _, want := range []string{p, "client_secret", "daily_quota", "mkto doctor"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

@@ -39,7 +39,7 @@ type Server struct {
 	routes  map[string][]Response
 	hits    map[string]int
 	methods []string
-	queries map[string]url.Values
+	queries map[string][]url.Values
 	headers map[string]http.Header
 }
 
@@ -50,7 +50,7 @@ func New(t testing.TB) *Server {
 		t:       t,
 		routes:  map[string][]Response{},
 		hits:    map[string]int{},
-		queries: map[string]url.Values{},
+		queries: map[string][]url.Values{},
 		headers: map[string]http.Header{},
 	}
 	s.Handle(IdentityPath, Response{Body: "identity_token_ok.json"})
@@ -101,7 +101,17 @@ func (s *Server) Methods() []string {
 func (s *Server) Query(path string) url.Values {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.queries[path]
+	if q := s.queries[path]; len(q) > 0 {
+		return q[len(q)-1]
+	}
+	return nil
+}
+
+// Queries returns the query of every request to path, in arrival order.
+func (s *Server) Queries(path string) []url.Values {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]url.Values(nil), s.queries[path]...)
 }
 
 // Header returns the headers of the last request to path.
@@ -115,7 +125,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	s.mu.Lock()
 	s.methods = append(s.methods, r.Method)
-	s.queries[p] = r.URL.Query()
+	s.queries[p] = append(s.queries[p], r.URL.Query())
 	s.headers[p] = r.Header.Clone()
 	rs, ok := s.routes[p]
 	n := s.hits[p]

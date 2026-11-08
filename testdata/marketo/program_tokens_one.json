@@ -1,0 +1,15 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "warnings": [],
+  "errors": [],
+  "result": [
+    {
+      "folder": {"type": "Program", "value": 4001},
+      "tokens": [
+        {"name": "Name", "type": "text", "value": "Example Whitepaper 2026", "computedUrl": "https://app-xx00.marketo.com/#ST4001A1"},
+        {"name": "WPlink", "type": "text", "value": "https://www.example.com/whitepaper", "computedUrl": "https://app-xx00.marketo.com/#ST4001A1"}
+      ]
+    }
+  ]
+}

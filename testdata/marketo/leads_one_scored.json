@@ -1,0 +1,22 @@
+{
+  "requestId": "req#1",
+  "result": [
+    {
+      "id": 1001,
+      "updatedAt": "2026-10-01T12:00:00Z",
+      "lastName": "Doe",
+      "email": "jane.doe@example.com",
+      "createdAt": "2025-01-10T09:00:00Z",
+      "firstName": "Jane",
+      "leadScore": 85,
+      "leadStatus": "MQL",
+      "leadOwnerEmailAddress": "a.rep@example.com",
+      "unsubscribed": false,
+      "emailInvalid": false,
+      "sfdcLeadId": "00Q000000000001AAA",
+      "sfdcContactId": null,
+      "sfdcAccountId": ""
+    }
+  ],
+  "success": true
+}

@@ -17,6 +17,7 @@
       "date": "2026-11-01T10:00:00Z",
       "type": "Visit Webpage",
       "primary": "www.example.com/pricing",
+      "primaryId": 71,
       "attributes": {
         "Client IP Address": "192.0.2.10",
         "Query Parameters": "utm_source=example\u0026utm_medium=email",
@@ -30,6 +31,7 @@
       "date": "2026-11-02T11:30:00Z",
       "type": "Fill Out Form",
       "primary": "Contact Us Form",
+      "primaryId": 12,
       "attributes": {
         "Client IP Address": "192.0.2.10",
         "Form Fields": "{\"Email\":\"jane.doe@example.com\"}",
@@ -43,7 +45,8 @@
       "id": 1001,
       "name": "Example Webinar 2026",
       "status": "Member",
-      "date": "2026-10-20T09:15:00Z"
+      "date": "2026-10-20T09:15:00Z",
+      "acquiredBy": true
     }
   ],
   "notes": []

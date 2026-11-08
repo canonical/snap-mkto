@@ -1,0 +1,8 @@
+{
+  "requestId": "req#2",
+  "success": true,
+  "result": [
+    {"id": 1003, "email": "sam.poe@example.com", "firstName": "Sam", "lastName": "Poe", "sfdcAccountId": "001EXAMPLE000001AAA", "leadScore": 10, "leadStatus": "New"}
+  ],
+  "moreResult": false
+}

@@ -1,24 +1,33 @@
 name: mkto
+title: mkto
 base: core26
-version: '0.1.0'
+version: '0.2.0'
 summary: Read-only command-line client for the Marketo Engage REST API
 description: |
-  Look up a Marketo lead by email, see its recent activity and program
-  memberships, list programs, and check daily API quota usage.
+  Look up a Marketo lead and see its score, status, owner and recent
+  activity, with score and status changes shown old to new. mkto why
+  explains an MQL or DQ, mkto account lists everyone at an account, and
+  mkto leads checks a list of emails. mkto doctor checks the setup.
   mkto brief (optional, off by default) writes an LLM lead brief from
   redacted activity data. mkto never writes to Marketo.
-grade: devel
+grade: stable
 confinement: strict
 license: Apache-2.0
 source-code: https://github.com/canonical/snap-mkto
 issues: https://github.com/canonical/snap-mkto/issues
+
+# Native builds only: each snap is built on its own architecture (CI uses an
+# arm64 runner for arm64).
+platforms:
+  amd64:
+  arm64:
 
 parts:
   mkto:
     plugin: go
     source: .
     build-snaps:
-      - go/1.27/stable
+      - go@1.27/stable
     build-packages:
       - git
     # The go plugin has no ldflags option, so build the one binary ourselves

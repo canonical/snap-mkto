@@ -23,8 +23,29 @@
     },
     {
       "id": "E3",
+      "date": "2026-11-02T11:00:00Z",
+      "type": "Change Score",
+      "asset": "Behavior Score",
+      "change": "+25 (60→85)"
+    },
+    {
+      "id": "E4",
+      "date": "2026-11-02T11:00:00Z",
+      "type": "Change Data Value",
+      "asset": "Lead Status",
+      "change": "Nurture→MQL"
+    },
+    {
+      "id": "E5",
       "date": "2026-11-03T08:00:00Z",
       "type": "Interesting Moment"
+    },
+    {
+      "id": "E6",
+      "date": "2026-11-04T15:00:00Z",
+      "type": "Change Status in Progression",
+      "asset": "Webinar Q4",
+      "change": "→ Attended"
     }
   ]
 }

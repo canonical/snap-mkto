@@ -47,20 +47,42 @@ func brief(t *testing.T, s *marketotest.Server, llm string, args ...string) (str
 		append([]string{"brief", "jane.doe@example.com"}, args...)...)
 }
 
-func TestBriefShowPayloadGolden(t *testing.T) {
+// briefStatusField is the [why] section that lets the Lead Status rows of briefStoryServer through.
+const briefStatusField = "[why]\nstatus_field = \"Lead Status\"\n"
+
+// briefStoryServer is briefServer plus a score change, two data value changes (one the
+// status field), a program status change and an Email Delivered row (T37).
+func briefStoryServer(t *testing.T) *marketotest.Server {
+	t.Helper()
 	s := briefServer(t, "Contact Us Form")
-	out, errOut, code := brief(t, s, "", "--show-payload", "--web") // [llm] absent: enabled=false
+	s.Handle(actsPath, marketotest.Response{Body: strings.TrimSuffix(briefActs("Contact Us Form"), "]}") + `,
+{"id":4,"leadId":1001,"activityDate":"2026-11-03T09:00:00Z","activityTypeId":7,"primaryAttributeValue":"November Newsletter","attributes":[]},
+{"id":5,"leadId":1001,"activityDate":"2026-11-02T11:31:00Z","activityTypeId":100,"primaryAttributeValue":"Behavior Score","attributes":[
+ {"name":"Change Value","value":"+25"},{"name":"Old Value","value":"60"},{"name":"New Value","value":"85"},{"name":"Reason","value":"Filled out form"}]},
+{"id":6,"leadId":1001,"activityDate":"2026-11-02T11:32:00Z","activityTypeId":13,"primaryAttributeValue":"Lead Status","attributes":[
+ {"name":"Old Value","value":"Nurture"},{"name":"New Value","value":"MQL"},{"name":"Reason","value":"Changed by smart campaign Score Threshold"}]},
+{"id":7,"leadId":1001,"activityDate":"2026-11-02T11:33:00Z","activityTypeId":13,"primaryAttributeValue":"Mobile Phone","attributes":[
+ {"name":"Old Value","value":""},{"name":"New Value","value":"+49 30 901820"}]},
+{"id":8,"leadId":1001,"activityDate":"2026-11-04T15:00:00Z","activityTypeId":22,"primaryAttributeValue":"Webinar Q4","attributes":[
+ {"name":"Old Status","value":"Registered"},{"name":"New Status","value":"Attended"},{"name":"Success","value":true},{"name":"Reason","value":"Checked in"}]}]}`})
+	return s
+}
+
+func TestShowPayloadGolden(t *testing.T) {
+	s := briefStoryServer(t)
+	out, errOut, code := brief(t, s, briefStatusField, "--show-payload") // [llm] absent: enabled=false; the fake ignores activityTypeIds; --web would only add 2 types to the batches
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	golden(t, "brief_show_payload.txt", out)
-	for _, bad := range []string{"jane", "Jane", "example.com/in", "+49", "192.0.2.10", "mkt_tok", "abc123", "555", "TOPSECRET"} {
+	for _, bad := range []string{"jane", "Jane", "example.com/in", "+49", "192.0.2.10", "mkt_tok", "abc123", "555", "TOPSECRET",
+		"Filled out", "Score Threshold", "Checked in", "Registered", "Mobile Phone", "Email Delivered", "November Newsletter"} {
 		if strings.Contains(out+errOut, bad) {
 			t.Errorf("output leaks %q", bad)
 		}
 	}
 	for _, m := range s.Methods() {
-		if m != http.MethodGet && m != http.MethodPost {
+		if m != http.MethodGet { // Marketo is GET-only; --show-payload calls no LLM
 			t.Errorf("unexpected method %s", m)
 		}
 	}
@@ -70,7 +92,7 @@ func TestBriefShowPayloadGolden(t *testing.T) {
 }
 
 func TestBriefShowPayloadNoResearch(t *testing.T) {
-	out, errOut, code := brief(t, briefServer(t, "Contact Us Form"), "", "--show-payload", "--no-research", "--web")
+	out, errOut, code := brief(t, briefStoryServer(t), briefStatusField, "--show-payload", "--no-research")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -107,7 +129,7 @@ func TestBriefShowPayloadURLRedaction(t *testing.T) {
 	s.Handle(tokenPath, marketotest.Response{Body: "pagingtoken_ok.json"})
 	s.Handle(actsPath, marketotest.Response{Body: `{"success":true,"moreResult":false,"result":[
 {"id":1,"leadId":1001,"activityDate":"2026-11-01T10:20:00Z","activityTypeId":1,"primaryAttributeValue":"www.example.com/u/bob.smith%2540example.org","attributes":[]}]}`})
-	out, errOut, code := brief(t, s, "", "--show-payload", "--web")
+	out, errOut, code := brief(t, s, "", "--show-payload")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -166,8 +188,10 @@ func TestBriefWebTypes(t *testing.T) {
 		args        []string
 		web, note   bool
 	}{
-		{"default skips web types", "", nil, false, true},
-		{"--web includes them", "", []string{"--web"}, true, false},
+		{"default has no web types", "", nil, false, false},
+		{"--web adds them to a list without", "activity_types = [\"Fill Out Form\", \"Open Email\"]\n", []string{"--web"}, true, false},
+		{"user list skips web types", webTypes, nil, false, true},
+		{"--web includes them", webTypes, []string{"--web"}, true, false},
 		{"no note without web types", "activity_types = [\"Fill Out Form\", \"Open Email\"]\n", nil, false, false},
 		{"case-insensitive", "activity_types = [\" visit WEBPAGE \", \"click link\", \"Open Email\"]\n", nil, false, true},
 	} {
@@ -187,21 +211,25 @@ func TestBriefWebTypes(t *testing.T) {
 	}
 }
 
-func TestBriefGates(t *testing.T) {
+func TestBriefOffInlineSteps(t *testing.T) {
 	for _, c := range []struct {
 		llm  string
 		code int
 		msg  string
 	}{
-		{"[llm]\nenabled = false\n", 1, "mkto brief is off. Read the sign-off section in docs/LLM_LAYER.md, then set [llm] enabled = true in "},
+		{"[llm]\nenabled = false\n", 1, "mkto brief is off. To turn it on, set [llm] enabled = true and api_key (or MKTO_LLM_API_KEY) in "},
 	} {
 		s := briefServer(t, "x")
 		out, errOut, code := brief(t, s, c.llm)
 		if code != c.code || out != "" || !strings.HasPrefix(errOut, c.msg) {
 			t.Errorf("%q: exit %d, stdout %q, stderr %q", c.llm, code, out, errOut)
 		}
-		if strings.Contains(c.msg, "is off") && !strings.HasSuffix(errOut, filepath.Join("config.toml")+".\n") {
-			t.Errorf("stderr = %q", errOut)
+		if want := filepath.Join("config.toml") + ". Preview what would be sent first: mkto brief <email> --show-payload." +
+			" Data-protection sign-off: https://github.com/canonical/snap-mkto/blob/main/docs/LLM_LAYER.md\n"; !strings.HasSuffix(errOut, want) {
+			t.Errorf("stderr = %q, want suffix %q", errOut, want)
+		}
+		if strings.Contains(errOut, "jane") {
+			t.Error("lead email echoed")
 		}
 		if s.Hits(leadsPath)+s.Hits(typesPath)+s.Hits(actsPath) != 0 || len(s.Methods()) != 0 {
 			t.Errorf("gate made Marketo calls: %v", s.Methods())
@@ -257,8 +285,8 @@ func briefLLMIn(t *testing.T, dir string, s *marketotest.Server, ai *llmtest.Ser
 	if ai != nil {
 		e.LLMBaseURL = ai.URL
 	}
-	// --web: briefActs holds a Visit Webpage row; TestBriefWebTypes covers the default that skips it.
-	code := run(append([]string{"--config", p, "brief", "jane.doe@example.com", "--web"}, args...), e)
+	// No --web: the fake returns briefActs (with its Visit Webpage row) whatever types are asked.
+	code := run(append([]string{"--config", p, "brief", "jane.doe@example.com"}, args...), e)
 	for _, leak := range []string{briefKey, "TOPSECRET", "s3cret"} {
 		if strings.Contains(out.String()+errb.String(), leak) {
 			t.Errorf("output contains a secret (%d chars)", len(leak))
@@ -599,5 +627,43 @@ func TestBriefLeadFieldsMissingStillErrors(t *testing.T) {
 	}
 	if got := s.Hits(leadsPath); got != 1 {
 		t.Errorf("leads hits = %d, want 1", got)
+	}
+}
+
+// TestBriefIgnoresProfileFields: brief's fetch never grows with profile_fields (the redact allowlist is fixed).
+func TestBriefIgnoresProfileFields(t *testing.T) {
+	s := briefServer(t, "Contact Us")
+	if _, errOut, code := brief(t, s, "", "--show-payload"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	f := strings.Split(s.Query(leadsPath).Get("fields"), ",")
+	for _, k := range []string{"leadScore", "leadStatus", "leadOwnerEmailAddress", "sfdcLeadOwnerId", "unsubscribed", "emailInvalid", "sfdcLeadId", "sfdcContactId", "sfdcAccountId"} {
+		if slices.Contains(f, k) {
+			t.Errorf("brief requested %s: %v", k, f)
+		}
+	}
+}
+
+func TestBriefOneLeadLookup(t *testing.T) {
+	s := briefServer(t, "Contact Us Form")
+	if _, errOut, code := brief(t, s, "", "--show-payload", "--no-research"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if n := s.Hits(leadsPath); n != 1 {
+		t.Errorf("leads.json hits = %d, want 1", n)
+	}
+}
+
+// TestBriefEventsShowChange: the Events table shows what the model saw for a change.
+func TestBriefEventsShowChange(t *testing.T) {
+	ai := llmtest.New(t, narration(sPricing), llmtest.Message(`{"unsupported":[]}`, 1, 1))
+	out, errOut, code := briefLLMConfig(t, briefStoryServer(t), ai, true, "model = \"test-model\"\n"+briefStatusField, "--no-research")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	for _, want := range []string{"Change Score                  Behavior Score +25 (60→85)\n", "Lead Status Nurture→MQL\n", "Webinar Q4 → Attended\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out)
+		}
 	}
 }

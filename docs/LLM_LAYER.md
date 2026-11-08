@@ -51,6 +51,14 @@ Always generalise, deterministically, **in code** (sending the raw title to an L
 - Known limit: in-place redaction removes only what the detectors find. Undetected personal data in the same value (e.g. a street address next to a redacted name) is sent. Review with `--show-payload` before sign-off.
 - Review the payload with `--show-payload` before data-protection sign-off.
 - For webpage / link activities: keep the URL reduced to scheme + host + path.
+- Score and status changes go in the event's `change` value, numbers and status names only:
+  - Change Score: the score field's label as `asset` (a field name, not personal data) and `change` = signed delta and old→new, e.g. `+25 (60→85)`. Each value is parsed as a number and re-formatted, so any text in it is dropped; a part whose values aren't numbers is left out.
+  - Change Data Value: only rows whose field label equals `[why] status_field` (case-insensitive), with the label as `asset` and `change` = `old→new`. Rows for any other field are dropped entirely; with no `status_field` set, all of them are.
+  - Change Status in Progression: the program name as `asset` (as before) and `change` = `→ <new status>`.
+  - Never: the Reason text, the campaign, or any other attribute of these rows.
+  - `change` is scanned and redacted in place by the final guard like every other value.
+  - Approved by Erekle 2026-11-08 (D2). A `status_field` whose label looks like personal data (email, phone, name, address, city, postal, IP, birth, social) is ignored in code (`redact.PersonalLabel`), so a mis-set config can't send those changes.
+- Email Delivered rows are dropped.
 - Drop: all other attributes, including query parameters, client IP, user agent, referrer query strings, search queries.
 
 ### URLs
@@ -114,7 +122,7 @@ Lives in the config directory (`~/snap/mkto/common/playbook.md` under the snap).
 mkto brief <email> [--days 90] [--lead-id N] [--no-research] [--show-payload] [--save] [--web] [--json]
 ```
 
-- By default `brief` skips the web activity types: "Visit Webpage" and "Click Link" (any case) are left out of `activity_types` for the fetch, and one stderr note says so: `note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them`. They make Marketo scan instance-wide web traffic (25–31 s a page on a real instance, 2026-11-08). `--web` includes them; `--show-payload` honours it. `mkto activity` is unchanged.
+- By default `brief` skips the web activity types: "Visit Webpage" and "Click Link" (any case) are left out of `activity_types` for the fetch, and one stderr note says so: `note: skipping web visits and link clicks (slow on large Marketo instances); add --web to include them`. They make Marketo scan instance-wide web traffic (25–31 s a page on a real instance, 2026-11-08). `--web` includes them; `--show-payload` honours it. Since 0.2.0 `mkto activity` skips them the same way and takes the same `--web` flag.
 
 - Refuse to run unless `[llm] enabled = true`, with a message pointing to this doc's sign-off section.
 - `--show-payload`: run fetch + redact, print the narrate payload and the research query (omitted with `--no-research`) exactly as they would be sent, send nothing, exit 0. Works even when `enabled = false`. It can't be combined with `--save` (exit 2).

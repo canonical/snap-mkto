@@ -1,0 +1,27 @@
+{
+  "requestId": "req#1",
+  "success": true,
+  "warnings": [],
+  "errors": [],
+  "result": [
+    {
+      "id": 3001,
+      "name": "Score Threshold",
+      "description": "Example smart campaign",
+      "createdAt": "2026-01-05T10:00:00Z+0000",
+      "updatedAt": "2026-02-05T10:00:00Z+0000",
+      "status": "Never Run",
+      "type": "trigger",
+      "isSystem": false,
+      "isActive": true,
+      "isRequestable": false,
+      "isCommunicationLimitEnabled": false,
+      "recurrence": {"weekdayOnly": false},
+      "qualificationRuleType": "always",
+      "workspace": "Default",
+      "smartListId": 3101,
+      "flowId": 3201,
+      "computedUrl": "https://app-xx00.marketo.com/#SC3001A1"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ var version, commit = "dev", "none"
 
 // Env is the injection point for everything a command touches outside itself.
 type Env struct {
+	Stdin          io.Reader // `leads --from -`
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
 	HTTP           *http.Client
@@ -29,6 +30,7 @@ type Env struct {
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	code := runContext(ctx, os.Args[1:], Env{
+		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Getenv: os.Getenv,

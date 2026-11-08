@@ -1,0 +1,76 @@
+{
+  "account": "001EXAMPLE000001AAA",
+  "by": "sfdcAccountId",
+  "since": "2026-10-24T12:00:00Z",
+  "total": 4,
+  "leads": [
+    {
+      "id": 1002,
+      "fields": {
+        "createdAt": null,
+        "email": "john.roe@example.com",
+        "firstName": "John",
+        "id": 1002,
+        "lastName": "Roe",
+        "leadScore": 85,
+        "leadStatus": "Nurture",
+        "title": "=HYPERLINK(1)",
+        "updatedAt": null
+      },
+      "lastTouch": "2026-10-20T09:00:00Z",
+      "touches": {
+        "Fill Out Form": 1
+      }
+    },
+    {
+      "id": 1003,
+      "fields": {
+        "createdAt": null,
+        "email": "sam.poe@example.com",
+        "firstName": "Sam",
+        "id": 1003,
+        "lastName": "Poe",
+        "leadScore": 40,
+        "leadStatus": "New",
+        "updatedAt": null
+      },
+      "lastTouch": "2026-11-07T11:30:00Z",
+      "touches": {
+        "Open Email": 1
+      }
+    },
+    {
+      "id": 1001,
+      "fields": {
+        "createdAt": null,
+        "email": "jane.doe@example.com",
+        "firstName": "Jane",
+        "id": 1001,
+        "lastName": "Doe",
+        "leadScore": 40,
+        "leadStatus": "MQL",
+        "title": "CTO",
+        "updatedAt": null
+      },
+      "lastTouch": "2026-11-07T11:00:00Z",
+      "touches": {
+        "Change Score": 1,
+        "Click Email": 1,
+        "Fill Out Form": 2,
+        "Open Email": 1
+      }
+    },
+    {
+      "id": 1004,
+      "fields": {
+        "createdAt": null,
+        "email": "no.name@example.com",
+        "firstName": null,
+        "id": 1004,
+        "lastName": null,
+        "leadScore": "n/a",
+        "updatedAt": null
+      }
+    }
+  ]
+}
